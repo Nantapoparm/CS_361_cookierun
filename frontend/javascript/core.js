@@ -134,6 +134,7 @@ function renderSidebar(site, section) {
     <div class="sidebar-foot">
       <div>${esc(m.updatedLabel)}</div>
       <div>${esc(m.updatedValue)}</div>
+      <div>${esc(m.More_information)}</div>
     </div>`);
 }
 
