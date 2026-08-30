@@ -1,0 +1,103 @@
+/* conditions.css — เฉพาะหน้า "เงื่อนไข" (ใช้ร่วมทั้ง 3 บทบาท) */
+
+/* ---------- การ์ดเงื่อนไข ---------- */
+
+.cond-grid { display: grid; gap: 22px; }
+.cond-grid.split { grid-template-columns: repeat(2, 1fr); }
+
+.cond-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.cond-card > header {
+  background: var(--navy-800);
+  color: #fff;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cond-card > header .no {
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid;
+  place-items: center;
+  background: var(--gold);
+  color: var(--navy-800);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.cond-card > header .t { font-size: 16px; font-weight: 700; }
+.cond-card > header .s { font-size: 12px; color: rgba(255, 255, 255, .6); }
+
+.checks { padding: 22px 24px; display: grid; gap: 14px; }
+.cond-grid.stack .checks { grid-template-columns: repeat(2, 1fr); column-gap: 34px; }
+.checks li { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; }
+.checks .tick {
+  flex: none;
+  width: 19px; height: 19px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: var(--gold);
+  display: grid;
+  place-items: center;
+}
+.checks .tick svg { display: block; }
+
+/* ---------- อัตราค่าตอบแทนและเพดาน ---------- */
+
+.rate {
+  margin-top: 26px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.rate > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy-800);
+}
+.rate-tiles {
+  padding: 22px 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+.tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #f7f9fc;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+.tile .ic {
+  flex: none;
+  width: 30px; height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--gold);
+  color: var(--navy-800);
+  border-radius: 6px;
+}
+.tile .k { font-size: 14px; font-weight: 700; color: var(--navy-800); }
+.tile .v { font-size: 13px; color: var(--ink-muted); }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1000px) {
+  .cond-grid.split { grid-template-columns: 1fr; }
+  .cond-grid.stack .checks { grid-template-columns: 1fr; }
+  .rate-tiles { grid-template-columns: 1fr; }
+}

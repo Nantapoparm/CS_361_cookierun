@@ -3,12 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ระบบเบิกค่าตอบแทนการสอน</title>
-  <link rel="stylesheet" href="/frontend/css/style.css">
+  <title>ระบบเบิกค่าตอบแทนการสอน | Teaching Compensation Claim System</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/home.css">
 </head>
-<body>
-  <h1>ระบบเบิกค่าตอบแทนการสอน</h1>
-  <div id="app"></div>
-  <script src="/frontend/javascript/app.js"></script>
+
+<!-- data-root = เส้นทางกลับไปยังโฟลเดอร์ frontend/ -->
+<body data-page="home" data-root="../">
+
+  <div class="topbar" data-mount="topbar"></div>
+  <header class="site-header" data-mount="header"></header>
+
+  <section class="hero" data-mount="hero"></section>
+  <section class="picker" data-mount="picker"></section>
+  <div data-mount="notice"></div>
+
+  <footer class="site-footer" id="contact" data-mount="footer"></footer>
+
+  <noscript>
+    <h1>ระบบเบิกค่าตอบแทนการสอน</h1>
+    <p>เว็บไซต์นี้ต้องเปิดใช้งาน JavaScript เพื่อแสดงข้อมูลอัตราค่าตอบแทน เงื่อนไข และขั้นตอนการเบิก</p>
+  </noscript>
+
+  <script src="../javascript/core.js"></script>
+  <script src="../javascript/home.js"></script>
 </body>
 </html>

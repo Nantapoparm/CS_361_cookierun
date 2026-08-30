@@ -1,0 +1,136 @@
+/* home.css — เฉพาะหน้าแรก: hero, การ์ดเลือกบทบาท, แถบหมายเหตุ */
+
+/* ---------- Hero ---------- */
+
+.hero {
+  background: var(--navy-800);
+  color: #fff;
+  text-align: center;
+  padding: 60px 24px 80px;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 18px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: .18em;
+  color: rgba(255, 255, 255, .82);
+}
+.hero-badge::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.hero .mark { margin: 34px auto 22px; display: block; }
+.hero h1 { font-size: 46px; font-weight: 700; letter-spacing: -.01em; }
+.hero-en { margin-top: 12px; font-size: 19px; color: rgba(255, 255, 255, .72); letter-spacing: .02em; }
+.hero-rule { width: 62px; height: 2px; background: var(--gold); opacity: .8; margin: 26px auto; }
+.hero-lead { max-width: 680px; margin: 0 auto; color: rgba(255, 255, 255, .78); font-size: 16px; }
+
+/* ---------- เลือกบทบาท ---------- */
+
+.picker { padding: 72px 0 56px; text-align: center; }
+.eyebrow { font-size: 13px; font-weight: 600; color: var(--navy-800); }
+.picker h2 { margin-top: 8px; font-size: 32px; font-weight: 700; color: var(--navy-800); }
+.picker-sub { max-width: 460px; margin: 12px auto 0; color: var(--ink-muted); }
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 44px;
+  text-align: left;
+}
+.role-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--navy-800);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 30px 28px;
+  transition: transform .15s, box-shadow .15s;
+}
+.role-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(15, 36, 85, .08), 0 16px 34px rgba(15, 36, 85, .10);
+}
+.role-icon {
+  width: 62px; height: 62px;
+  display: grid;
+  place-items: center;
+  background: #f1f4fa;
+  border-radius: 12px;
+  color: var(--navy-800);
+  margin-bottom: 26px;
+}
+.role-card h3 { font-size: 18px; font-weight: 700; color: var(--navy-800); }
+.role-card .label {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.role-card .rule { width: 34px; height: 3px; background: var(--gold); margin: 14px 0 16px; }
+.role-card p { color: var(--ink-muted); font-size: 14px; margin-bottom: 34px; }
+
+.btn-gold {
+  display: block;
+  margin-top: auto;
+  background: var(--gold);
+  color: var(--navy-800);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  border: 0;
+  border-radius: 4px;
+  padding: 13px 16px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-gold:hover { background: var(--gold-dark); }
+
+/* ---------- แถบหมายเหตุ ---------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--navy-800);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 72px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.notice .icon {
+  flex: none;
+  width: 38px; height: 38px;
+  display: grid;
+  place-items: center;
+  background: var(--gold);
+  color: var(--navy-800);
+  border-radius: 8px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1000px) {
+  .role-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .hero { padding: 44px 20px 56px; }
+  .hero h1 { font-size: 32px; }
+  .hero-en { font-size: 16px; }
+  .picker h2 { font-size: 25px; }
+}

@@ -1,0 +1,196 @@
+/* layout.css — โครงร่วมทุกหน้า: แถบบน, header, sidebar, breadcrumb, หัวข้อ section, footer */
+
+/* ---------- แถบบนสุด ---------- */
+
+.topbar {
+  background: var(--navy-900);
+  color: rgba(255, 255, 255, .68);
+  font-size: 12px;
+}
+.topbar .wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  height: 30px;
+}
+.topbar .sep { color: rgba(255, 255, 255, .25); }
+
+/* ---------- Header (หน้าแรก) ---------- */
+
+.site-header {
+  background: var(--navy-800);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  position: relative;
+}
+.site-header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: .55;
+}
+.site-header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 72px;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-name { color: #fff; font-size: 14px; font-weight: 700; letter-spacing: .06em; }
+.brand-sub { color: rgba(255, 255, 255, .6); font-size: 11px; letter-spacing: .04em; }
+
+.main-nav { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.main-nav a {
+  color: rgba(255, 255, 255, .78);
+  font-size: 14px;
+  padding: 6px 0;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.main-nav a:hover { color: #fff; }
+.main-nav a.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* ---------- Header (หน้าบทบาท) ---------- */
+
+.role-header::after { content: none; }
+.role-header .wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 74px;
+  max-width: none;
+}
+.back-link { display: flex; align-items: center; gap: 8px; color: rgba(255, 255, 255, .8); font-size: 14px; }
+.back-link:hover { color: var(--gold); }
+.role-header .divider { width: 1px; height: 30px; background: rgba(255, 255, 255, .18); }
+.role-id { display: flex; align-items: center; gap: 12px; }
+.role-id .t { color: #fff; font-size: 16px; font-weight: 700; }
+.role-id .s { color: rgba(255, 255, 255, .58); font-size: 12px; }
+
+/* ---------- โครง sidebar + main ---------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: calc(100vh - 104px);
+  align-items: stretch;
+}
+
+.sidebar {
+  background: var(--navy-800);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 24px;
+}
+.sidebar-head { padding: 24px 24px 22px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.sidebar-head .k { color: rgba(255, 255, 255, .5); font-size: 12px; }
+.sidebar-head .v { color: #fff; font-size: 16px; font-weight: 700; }
+
+.side-nav { padding: 22px 14px; display: grid; gap: 6px; }
+.side-nav a {
+  display: block;
+  padding: 12px 16px;
+  border-left: 3px solid rgba(255, 255, 255, .16);
+  border-radius: 0 6px 6px 0;
+  color: rgba(255, 255, 255, .82);
+  transition: background .15s, color .15s;
+}
+.side-nav a .t { font-size: 15px; font-weight: 600; }
+.side-nav a .s { font-size: 12px; color: rgba(255, 255, 255, .5); }
+.side-nav a:hover { background: rgba(255, 255, 255, .06); }
+.side-nav a.active {
+  background: var(--gold);
+  border-left-color: var(--navy-800);
+  border-radius: 6px;
+  color: var(--navy-800);
+}
+.side-nav a.active .s { color: rgba(15, 36, 85, .65); }
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 22px 24px 0;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .45);
+  font-size: 12px;
+}
+
+.main { background: var(--page); min-width: 0; }
+
+/* ---------- Breadcrumb + หัวข้อ section ---------- */
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 40px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.crumbs .sep { color: var(--ink-faint); display: flex; }
+.crumbs .now { color: var(--navy-800); font-weight: 600; }
+
+.content { padding: 34px 40px 56px; }
+
+.section-head { display: flex; align-items: center; gap: 14px; }
+.section-no {
+  width: 34px; height: 34px;
+  display: grid;
+  place-items: center;
+  background: var(--gold);
+  color: var(--navy-800);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.section-head h2 { font-size: 22px; font-weight: 700; color: var(--navy-800); }
+.section-head .en {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.section-rule { height: 1px; background: var(--line); margin: 22px 0 20px; }
+.intro { color: var(--ink); margin-bottom: 26px; }
+
+/* ---------- Footer ---------- */
+
+.site-footer {
+  background: var(--navy-900);
+  color: rgba(255, 255, 255, .55);
+  font-size: 12px;
+  padding: 26px 0;
+}
+.site-footer .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.site-footer .left { display: flex; align-items: center; gap: 12px; }
+.site-footer .right { color: rgba(255, 255, 255, .38); }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1000px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { padding-bottom: 0; }
+  .sidebar-foot { display: none; }
+  .side-nav { grid-auto-flow: column; grid-auto-columns: 1fr; }
+  .crumbs, .content { padding-left: 24px; padding-right: 24px; }
+}
+
+@media (max-width: 640px) {
+  .site-header .wrap { flex-direction: column; align-items: flex-start; padding-top: 14px; padding-bottom: 14px; }
+  .role-header .wrap { flex-direction: row; align-items: center; }
+  .main-nav { gap: 16px; }
+  .side-nav { grid-auto-flow: row; }
+  .topbar .wrap { justify-content: center; }
+  .site-footer .wrap { flex-direction: column; align-items: flex-start; }
+}

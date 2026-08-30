@@ -1,0 +1,65 @@
+{
+  "_comment": "ข้อมูลที่ใช้ร่วมกันทุกหน้า — แถบหัว/ท้าย, การ์ดเลือกบทบาทในหน้าแรก, ชื่อหัวข้อในสารบัญ. เนื้อหาเฉพาะหน้าอยู่ที่ data/<role>/<section>.json",
+
+  "meta": {
+    "org": "มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต",
+    "academicYear": "ปีการศึกษา 2569",
+    "brand": "COMPUTER SCIENCE",
+    "brandSub": "Thammasat University",
+    "siteTitle": "ระบบเบิกค่าตอบแทนการสอน",
+    "siteTitleEn": "Teaching Compensation Claim System",
+    "updatedLabel": "ปรับปรุงล่าสุด",
+    "updatedValue": "สิงหาคม 2569"
+  },
+
+  "home": {
+    "badge": "COMPENSATION SYSTEM",
+    "lead": "แหล่งข้อมูล เงื่อนไข อัตราค่าตอบแทนการสอนและขั้นตอนของผู้สอนและผู้ช่วยทุกประเภท",
+    "eyebrow": "เลือกประเภทผู้ใช้งาน",
+    "heading": "กรุณาเลือกบทบาทของท่าน",
+    "subheading": "Select Your Role to access relevant compensation guidelines and documents",
+    "cta": "ดูรายละเอียด",
+    "notice": "ข้อมูลอ้างอิงจากระเบียบมหาวิทยาลัย ปีการศึกษา 2569"
+  },
+
+  "footer": {
+    "left": "Computer Science · Teaching Compensation Manual",
+    "right": "© 2569 สงวนลิขสิทธิ์ · สำหรับบุคลากรและนักศึกษาของมหาวิทยาลัยเท่านั้น"
+  },
+
+  "sections": {
+    "conditions": { "no": "01", "title": "เงื่อนไข", "titleEn": "Conditions" },
+    "workflow": { "no": "02", "title": "ขั้นตอนการทำงาน", "titleEn": "Workflow" }
+  },
+
+  "ratePanelTitle": "อัตราค่าตอบแทนและเพดาน",
+
+  "tip": {
+    "label": "คำแนะนำ:",
+    "text": "หากไม่สามารถยื่นเอกสารได้ตามกำหนด กรุณาติดต่อเจ้าหน้าที่ภาควิชาล่วงหน้าอย่างน้อย 2 วันทำการ เพื่อขอขยายระยะเวลาเป็นกรณีเฉพาะ"
+  },
+
+  "roles": [
+    {
+      "id": "instructor",
+      "title": "อาจารย์ / ผู้สอน",
+      "titleEn": "Instructor",
+      "cardDesc": "ข้อมูลค่าตอบแทนการสอนสำหรับอาจารย์",
+      "icon": "person"
+    },
+    {
+      "id": "ta",
+      "title": "ผู้ช่วยสอน (TA)",
+      "titleEn": "Teaching Assistant",
+      "cardDesc": "ข้อมูลค่าตอบแทนการสอนสำหรับผู้ช่วยสอน",
+      "icon": "people"
+    },
+    {
+      "id": "student",
+      "title": "นักศึกษาช่วยงาน",
+      "titleEn": "Student Helper",
+      "cardDesc": "ข้อมูลค่าตอบแทนการสอนสำหรับนักศึกษาช่วยงาน",
+      "icon": "cap"
+    }
+  ]
+}

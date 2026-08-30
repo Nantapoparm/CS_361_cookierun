@@ -1,0 +1,95 @@
+/* workflow.css — เฉพาะหน้า "ขั้นตอนการทำงาน" (ใช้ร่วมทั้ง 3 บทบาท) */
+
+/* ---------- แถวเลข STEP ---------- */
+
+.steps { position: relative; margin-bottom: 6px; }
+.steps-rail {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  position: relative;
+  margin-bottom: 22px;
+}
+/* เส้นเชื่อมระหว่างเลข STEP */
+.steps-rail::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 12.5%;
+  right: 12.5%;
+  height: 1px;
+  background: var(--line);
+}
+.step-badge {
+  position: relative;
+  justify-self: center;
+  width: 78px; height: 78px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  background: var(--navy-800);
+  border-radius: 14px;
+  box-shadow: 0 6px 16px rgba(15, 36, 85, .18);
+}
+.step-badge .k { font-size: 10px; font-weight: 600; letter-spacing: .16em; color: var(--gold); }
+.step-badge .n { font-size: 26px; font-weight: 700; line-height: 1; color: var(--gold); }
+
+/* ---------- การ์ดขั้นตอน ---------- */
+
+.step-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.step-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 22px 20px;
+  text-align: center;
+}
+.step-card .t { font-size: 15px; font-weight: 700; color: var(--navy-800); }
+.step-card .s { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+.step-card p { font-size: 13px; color: var(--ink-muted); margin-top: 14px; }
+
+/* ---------- กล่องกำหนดเวลา ---------- */
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 26px; }
+.stat {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 20px;
+  text-align: center;
+}
+.stat .k { font-size: 12px; letter-spacing: .06em; color: var(--ink-faint); }
+.stat .v { font-size: 21px; font-weight: 700; color: var(--navy-800); margin: 4px 0 6px; }
+.stat .n { font-size: 12px; color: var(--ink-muted); }
+
+/* ---------- กล่องคำแนะนำ ---------- */
+
+.tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 26px;
+  background: var(--gold-soft);
+  border: 1px solid #f6e6ae;
+  border-left: 4px solid var(--gold);
+  border-radius: 6px;
+  padding: 20px 22px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.tip .ic { flex: none; color: var(--gold-dark); margin-top: 1px; }
+.tip b { color: var(--navy-800); }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1000px) {
+  .step-cards, .stats, .steps-rail { grid-template-columns: repeat(2, 1fr); }
+  .steps-rail { gap: 22px 0; }
+  .steps-rail::before { content: none; }
+}
+
+@media (max-width: 640px) {
+  .step-cards, .stats, .steps-rail { grid-template-columns: 1fr; }
+}
