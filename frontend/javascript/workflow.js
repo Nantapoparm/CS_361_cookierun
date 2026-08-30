@@ -36,5 +36,9 @@ function initPage(site, page) {
     <div class="tip">
       <span class="ic">${ICONS.alert}</span>
       <span><b>${esc(tip.label)}</b> ${esc(tip.text)}</span>
-    </div>`);
+    </div>
+    
+    `);
+
+    
 }
