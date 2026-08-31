@@ -4,8 +4,8 @@
   "pendingHint": "ไฟล์อยู่ระหว่างจัดทำ",
 
   "items": [
-    { "text": "คู่มือสำหรับอาจารย์",            "file": "" },
-    { "text": "คู่มือสำหรับผู้ช่วยสอน (TA)",    "file": "" },
-    { "text": "คู่มือสำหรับนักศึกษาช่วยงาน",     "file": "" }
+    { "text": "คู่มือสำหรับอาจารย์",            "file": "http://localhost:5000/file/T.pdf" },
+    { "text": "คู่มือสำหรับผู้ช่วยสอน (TA)",    "file": "http://localhost:5000/file/TA.pdf" },
+    { "text": "คู่มือสำหรับนักศึกษาช่วยงาน",     "file": "http://localhost:5000/file/STA.pdf" }
   ]
 }
