@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบเบิกค่าตอบแทนการสอน | Teaching Compensation Claim System</title>
+  <link rel="icon" href="assets/logo.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <header class="topbar" data-mount="topbar"></header>
+
+  <div class="shell">
+    <aside class="sidebar" data-mount="sidebar"></aside>
+
+    <main class="main">
+      <div class="content">
+        <!-- hero อยู่นอกรายการหัวข้อ จึงไม่มีใน sidebar -->
+        <section class="hero" data-mount="hero"></section>
+
+        <!-- ทุกหัวข้อถูกสร้างจาก data/site.json + data/sections/*.json -->
+        <div data-mount="sections">
+          <p class="boot">กำลังโหลดข้อมูล…</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <noscript>
+    <h1>ระบบเบิกค่าตอบแทนการสอน</h1>
+    <p>เว็บไซต์นี้ต้องเปิดใช้งาน JavaScript เพื่อแสดงอัตราค่าตอบแทน หลักเกณฑ์ เอกสาร และช่วงเวลาการเบิกจ่าย</p>
+  </noscript>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/sections.js"></script>
+  <script src="javascript/app.js"></script>
+</body>
+</html>
