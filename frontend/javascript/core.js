@@ -1,4 +1,4 @@
-// core.js — เครื่องมือพื้นฐานที่ไฟล์อื่นเรียกใช้: escape, mount, โหลด JSON, ไอคอน
+// core.js — เครื่องมือพื้นฐานที่ไฟล์อื่นเรียกใช้: escape, mount, โหลด JSON, ไอคอน, lightbox
 // ต้องโหลดเป็นไฟล์แรกเสมอ
 
 /* ---------- utils ---------- */
@@ -42,7 +42,8 @@ const ICONS = {
   file: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1.6 1.6 0 0 0-1.6 1.6v14.8A1.6 1.6 0 0 0 7 21h10a1.6 1.6 0 0 0 1.6-1.6V7.6L14 3Z"/><path d="M13.8 3.2v4.4h4.6"/></svg>',
   info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M12 16.3v-4.7M12 8h.01"/></svg>',
   warning: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.4 21 19.6H3L12 4.4Z"/><path d="M12 10.2v3.9M12 17h.01"/></svg>',
-  tick: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.6 4.6L19 7.5"/></svg>'
+  tick: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.6 4.6L19 7.5"/></svg>',
+  close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>'
 };
 
 // ไอคอนของกล่องหมายเหตุ เลือกตาม tone
@@ -60,4 +61,48 @@ function noteBox(note) {
     <span class="ic">${NOTE_ICON[tone] || ICONS.info}</span>
     <span>${label}${esc(note.text)}${link}</span>
   </div>`;
+}
+
+/* ---------- Lightbox รูปเอกสาร ---------- */
+// เปิด/ปิดรูปขยายแบบ popup — เรียกจาก onclick ที่ sections.js สร้างไว้ (documents section)
+
+let _lastFocusedEl = null;
+
+function openImageModal(src, alt) {
+  closeImageModal(); // กันเปิดซ้อน
+  _lastFocusedEl = document.activeElement;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'img-modal';
+  overlay.id = 'img-modal';
+  overlay.innerHTML = `
+    <button class="img-modal-close" type="button" aria-label="ปิด">${ICONS.close}</button>
+    <img src="${esc(src)}" alt="${esc(alt)}">
+  `;
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeImageModal();
+  });
+  overlay.querySelector('.img-modal-close').addEventListener('click', closeImageModal);
+
+  document.body.appendChild(overlay);
+  document.body.classList.add('modal-open');
+  document.addEventListener('keydown', _onModalKeydown);
+
+  requestAnimationFrame(() => overlay.classList.add('is-open'));
+  overlay.querySelector('.img-modal-close').focus();
+}
+
+function closeImageModal() {
+  const overlay = document.getElementById('img-modal');
+  if (!overlay) return;
+  overlay.classList.remove('is-open');
+  document.removeEventListener('keydown', _onModalKeydown);
+  document.body.classList.remove('modal-open');
+  overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+  if (_lastFocusedEl) _lastFocusedEl.focus();
+}
+
+function _onModalKeydown(e) {
+  if (e.key === 'Escape') closeImageModal();
 }

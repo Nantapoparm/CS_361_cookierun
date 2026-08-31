@@ -89,6 +89,11 @@ const SECTIONS = {
   documents(data) {
     const cards = data.groups.map((g) => `
       <article class="doc-card">
+        ${g.image ? `
+        <button class="doc-thumb" type="button"
+                onclick="openImageModal('${esc(g.image)}', '${esc(g.imageAlt || g.title)}')">
+          <img src="${esc(g.image)}" alt="${esc(g.imageAlt || g.title)}" loading="lazy">
+        </button>` : ''}
         <h3>${esc(g.title)}</h3>
         <ul>
           ${g.items.map((i) => `<li><span class="tick">${ICONS.tick}</span><span>${esc(i)}</span></li>`).join('')}

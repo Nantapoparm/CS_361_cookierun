@@ -10,7 +10,6 @@
   text-align: center;
   padding: 52px 32px 56px;
 }
-/* โลโก้เดี่ยว ไม่มีกรอบครอบ — ไฟล์ต้นฉบับ 50x66 px อย่าแสดงสูงกว่านี้ ภาพจะแตก */
 .hero-logo { height: 52px; width: auto; display: block; margin: 0 auto 26px; }
 .hero h1 { font-size: 33px; font-weight: 700; }
 .hero-en { margin-top: 12px; font-size: 15px; color: rgba(255, 255, 255, .6); }
@@ -87,7 +86,6 @@
 }
 .rate-table thead th:nth-child(2) { text-align: center; }
 
-/* บทบาท 26% · อัตรา 24% · เพดาน 50% */
 .rate-table col.c-role { width: 26%; }
 .rate-table col.c-rate { width: 24%; }
 
@@ -101,7 +99,6 @@
 .rate-table .limit .v { display: block; font-size: 14px; color: var(--ink); }
 .rate-table .limit .n { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-faint); }
 
-/* กล่องหมายเหตุที่ต่อท้ายตาราง ให้ดูเป็นแถวต่อเนื่องของการ์ด */
 .table-card .note {
   border-radius: 0;
   border-left: 0;
@@ -181,10 +178,34 @@
   place-items: center;
 }
 
+/* thumbnail รูปตัวอย่างในการ์ดเอกสาร — กดแล้วเปิด lightbox */
+.doc-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 4px);
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--line-soft);
+  margin-bottom: 18px;
+  transition: border-color .15s;
+}
+.doc-thumb:hover { border-color: var(--gold); }
+.doc-thumb:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.doc-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .2s ease;
+}
+.doc-thumb:hover img { transform: scale(1.04); }
+
 /* ---------- เส้นเวลา ---------- */
 
 .timeline { position: relative; display: grid; gap: 26px; padding-left: 150px; }
-/* เส้นแนวตั้งเชื่อมทุกจุด */
 .timeline::before {
   content: "";
   position: absolute;
@@ -245,6 +266,47 @@
 .note.danger .ic { color: var(--danger); }
 .note.danger b { color: var(--danger); }
 
+/* ---------- Lightbox รูปเอกสาร ---------- */
+
+.img-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 15, .82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  padding: 32px;
+  transition: opacity .2s ease;
+}
+.img-modal.is-open { opacity: 1; }
+.img-modal img {
+  max-width: min(90vw, 960px);
+  max-height: 85vh;
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.45);
+  transform: scale(.96);
+  transition: transform .2s ease;
+}
+.img-modal.is-open img { transform: scale(1); }
+.img-modal-close {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s;
+}
+.img-modal-close:hover { background: rgba(255,255,255,.22); }
+body.modal-open { overflow: hidden; }
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
@@ -253,7 +315,6 @@
   .hero { padding: 40px 22px 44px; }
   .hero h1 { font-size: 26px; }
 
-  /* เส้นเวลา: ย้ายป้ายวันที่ขึ้นมาไว้ด้านบนของแต่ละขั้น */
   .timeline { padding-left: 24px; }
   .timeline::before { left: 7px; }
   .tl-step { padding-top: 30px; }
@@ -263,8 +324,11 @@
 
 @media (max-width: 640px) {
   .manual { width: 100%; justify-content: flex-start; }
-  /* ตาราง 3 คอลัมน์แคบเกินไปบนมือถือ ให้เลื่อนแนวนอนในการ์ดตัวเอง */
   .table-card { overflow-x: auto; }
   .rate-table { min-width: 560px; }
   .rate-table td, .rate-table thead th { padding-left: 14px; padding-right: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .img-modal, .img-modal img, .doc-thumb img { transition: none; }
 }
