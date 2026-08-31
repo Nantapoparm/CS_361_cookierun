@@ -25,7 +25,7 @@ function renderHero(site) {
 }
 
 function renderSidebar(site) {
-  const nav = site.sections.map((s, i) => `
+  const nav = (site.sections || []).map((s, i) => `
     <a href="#${s.id}" data-spy="${s.id}" class="${i === 0 ? 'active' : ''}">${esc(s.nav)}</a>`).join('');
 
   const lg = site.sidebar.login;
