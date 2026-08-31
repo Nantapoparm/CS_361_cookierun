@@ -1,1 +1,0 @@
-app.use('/file', express.static(path.join(__dirname, 'file')));
