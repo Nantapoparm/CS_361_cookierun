@@ -7,7 +7,7 @@ async function boot() {
 
     // โหลดไฟล์ของทุกหัวข้อพร้อมกัน ไม่ต้องรอทีละไฟล์
     const contents = await Promise.all(
-      site.sections.map((s) => loadJSON(`sections/${s.id}.json`))
+      (site.sections || []).map((s) => loadJSON(`sections/${s.id}.json`))
     );
 
     renderTopbar(site);
@@ -15,7 +15,7 @@ async function boot() {
     renderSidebar(site);
     renderFooter(site);
 
-    mount('sections', site.sections
+    mount('sections', (site.sections || [])
       .map((meta, i) => renderSection(meta, contents[i]))
       .join(''));
 
