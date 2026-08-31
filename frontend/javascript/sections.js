@@ -1,3 +1,5 @@
+ 
+ม.
 // sections.js — ตัวเรนเดอร์ของแต่ละหัวข้อ
 //
 // เพิ่มหัวข้อใหม่ทำ 3 อย่าง:
@@ -11,7 +13,7 @@ const SECTIONS = {
 
   /* ---------- ภาพรวมระบบ ---------- */
   overview(data) {
-    const cards = data.metrics.map((m) => `
+    const cards = (data.metrics || []).map((m) => ` 
       <div class="metric">
         <div class="v">${esc(m.value)}</div>
         <div class="k">${esc(m.label)}</div>
