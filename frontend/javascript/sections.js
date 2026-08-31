@@ -106,7 +106,7 @@ const SECTIONS = {
         <div class="tl-title">${esc(s.title)}</div>
         <div class="tl-desc">${esc(s.desc)}</div>
       </div>`).join('');
-    return `<div class="timeline">${steps}</div>`;
+    return `<div class="timeline">${steps}</div>${(data.notes || []).map(noteBox).join('')}`;
   }
 };
 

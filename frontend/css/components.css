@@ -108,7 +108,11 @@
   border-right: 0;
   border-bottom: 0;
   margin: 0;
+  /* ระยะขอบเท่ากับช่องในตาราง (22px) ตัวอักษรจะได้ตรงแนวเดียวกัน ไม่ชิดขอบกล่อง */
+  padding: 14px 22px;
 }
+/* หมายเหตุหลายบรรทัดต่อกัน ให้มีเส้นคั่นบางๆ ระหว่างกัน */
+.table-card .note + .note { border-top-color: var(--line-soft); }
 .note a { color: inherit; font-weight: 600; text-decoration: underline; white-space: nowrap; }
 
 /* ---------- การ์ดรอบการเบิก ---------- */
@@ -194,7 +198,8 @@
   width: 1px;
   background: var(--line);
 }
-.tl-step { position: relative; }
+/* เว้นซ้ายให้ข้อความพ้นจุดสีทอง ไม่งั้นตัวอักษรจะทับจุด */
+.tl-step { position: relative; padding-left: 26px; }
 .tl-when {
   position: absolute;
   left: -150px;
@@ -208,9 +213,10 @@
   padding: 4px 10px;
   border-radius: 999px;
 }
+/* จุดกว้าง 15px ต้องให้จุดกึ่งกลางตรงกับเส้นแนวตั้งที่ 157px พอดี */
 .tl-dot {
   position: absolute;
-  left: -14px;
+  left: -0.5px;
   top: 5px;
   width: 15px; height: 15px;
   border-radius: 50%;
@@ -256,9 +262,9 @@
   /* เส้นเวลา: ย้ายป้ายวันที่ขึ้นมาไว้ด้านบนของแต่ละขั้น */
   .timeline { padding-left: 24px; }
   .timeline::before { left: 7px; }
-  .tl-step { padding-top: 30px; }
+  .tl-step { padding-top: 30px; padding-left: 0; }
   .tl-when { position: static; display: inline-block; width: auto; margin-bottom: 6px; }
-  .tl-dot { left: -24px; top: 36px; }
+  .tl-dot { left: -24.5px; top: 36px; }
 }
 
 @media (max-width: 640px) {
