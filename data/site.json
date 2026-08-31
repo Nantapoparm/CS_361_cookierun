@@ -1,66 +1,46 @@
 {
-  "_comment": "ข้อมูลที่ใช้ร่วมกันทุกหน้า — แถบหัว/ท้าย, การ์ดเลือกบทบาทในหน้าแรก, ชื่อหัวข้อในสารบัญ. เนื้อหาเฉพาะหน้าอยู่ที่ data/<role>/<section>.json",
+  "_comment": "ข้อมูลโครงเว็บ — แถบบน, hero, รายการหัวข้อในสารบัญ, ปุ่มเข้าสู่ระบบ, footer. เนื้อหาของแต่ละหัวข้ออยู่ที่ data/sections/<id>.json",
 
   "meta": {
-    "org": "มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต",
-    "academicYear": "ปีการศึกษา 2569",
+    "logo": "assets/logo.png",
+    "logoAlt": "ตราโดม มหาวิทยาลัยธรรมศาสตร์",
     "brand": "COMPUTER SCIENCE",
     "brandSub": "Thammasat University",
+    "org": "มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต",
+    "academicYear": "ปีการศึกษา 2569",
     "siteTitle": "ระบบเบิกค่าตอบแทนการสอน",
-    "siteTitleEn": "Teaching Compensation Claim System",
-    "updatedLabel": "ปรับปรุงล่าสุด",
-    "updatedValue": "สิงหาคม 2569",
-    "More_information" : "More information : https://db.legal.tu.ac.th/020201-14-02/"
+    "siteTitleEn": "Teaching Compensation Claim System"
   },
 
-  "home": {
-    "badge": "COMPENSATION SYSTEM",
-    "lead": "แหล่งข้อมูล เงื่อนไข อัตราค่าตอบแทนการสอนและขั้นตอนของผู้สอนและผู้ช่วยทุกประเภท",
-    "eyebrow": "เลือกประเภทผู้ใช้งาน",
-    "heading": "กรุณาเลือกบทบาทของท่าน",
-    "subheading": "Select Your Role to access relevant compensation guidelines and documents",
-    "cta": "ดูรายละเอียด",
-    "notice": "ข้อมูลอ้างอิงจากระเบียบมหาวิทยาลัย ปีการศึกษา 2569"
+  "hero": {
+    "title": "ระบบเบิกค่าตอบแทนการสอน",
+    "titleEn": "Teaching Compensation Claim System",
+    "lead": "ติดตามสถานะการเบิกจ่ายค่าตอบแทนได้ในที่เดียว ระบบนี้รวบรวมอัตราค่าตอบแทน หลักเกณฑ์ และเอกสารที่ต้องใช้"
+  },
+
+  "sidebar": {
+    "label": "หัวข้อเนื้อหา",
+    "login": {
+      "text": "เข้าสู่ระบบ",
+      "enabled": false,
+      "url": "",
+      "disabledHint": "ระบบเข้าสู่ระบบจะเปิดใช้งานในเวอร์ชันถัดไป"
+    }
   },
 
   "footer": {
-    "left": "Computer Science · Teaching Compensation Manual",
-    "right": "© 2569 สงวนลิขสิทธิ์ · สำหรับบุคลากรและนักศึกษาของมหาวิทยาลัยเท่านั้น"
+    "text": "© 2569 สงวนลิขสิทธิ์ · สำหรับบุคลากรและนักศึกษาของมหาวิทยาลัยเท่านั้น"
   },
 
-  "sections": {
-    "conditions": { "no": "01", "title": "เงื่อนไข", "titleEn": "Conditions" },
-    "workflow": { "no": "02", "title": "ขั้นตอนการทำงาน", "titleEn": "Workflow" }
-  },
+  "_sectionsNote": "ลำดับใน array นี้คือลำดับทั้งในสารบัญและในหน้า — id ต้องตรงกับชื่อไฟล์ใน data/sections/ และตรงกับตัวเรนเดอร์ใน javascript/sections.js",
 
-  "ratePanelTitle": "อัตราค่าตอบแทนและเพดาน",
-
-  "tip": {
-    "label": "คำแนะนำ:",
-    "text": "หากไม่สามารถยื่นเอกสารได้ตามกำหนด กรุณาติดต่อเจ้าหน้าที่ภาควิชาล่วงหน้าอย่างน้อย 2 วันทำการ เพื่อขอขยายระยะเวลาเป็นกรณีเฉพาะ"
-  },
-
-  "roles": [
-    {
-      "id": "instructor",
-      "title": "อาจารย์ / ผู้สอน",
-      "titleEn": "Instructor",
-      "cardDesc": "ข้อมูลค่าตอบแทนการสอนสำหรับอาจารย์",
-      "icon": "person"
-    },
-    {
-      "id": "ta",
-      "title": "ผู้ช่วยสอน (TA)",
-      "titleEn": "Teaching Assistant",
-      "cardDesc": "ข้อมูลค่าตอบแทนการสอนสำหรับผู้ช่วยสอน",
-      "icon": "people"
-    },
-    {
-      "id": "student",
-      "title": "นักศึกษาช่วยงาน",
-      "titleEn": "Student Helper",
-      "cardDesc": "ข้อมูลค่าตอบแทนการสอนสำหรับนักศึกษาช่วยงาน",
-      "icon": "cap"
-    }
+  "sections": [
+    { "id": "overview",  "nav": "ภาพรวมระบบ",              "eyebrow": "SYSTEM OVERVIEW",     "title": "ภาพรวมระบบ",              "subtitle": "Key system metrics at a glance" },
+    { "id": "users",     "nav": "ผู้มีสิทธิ์เบิก",              "eyebrow": "ELIGIBLE USERS",      "title": "ผู้มีสิทธิ์เบิก",              "subtitle": "Select your role to view compensation guidelines" },
+    { "id": "rates",     "nav": "อัตราและเพดานชั่วโมง",       "eyebrow": "RATES & HOUR LIMITS", "title": "อัตราค่าตอบแทนและเพดานชั่วโมง", "subtitle": "Rates and hour limits by role" },
+    { "id": "cycles",    "nav": "รอบการเบิก",               "eyebrow": "BILLING CYCLES",      "title": "รอบการเบิก",               "subtitle": "Monthly submission deadlines" },
+    { "id": "manuals",   "nav": "คู่มือและแบบฟอร์ม",           "eyebrow": "MANUALS & FORMS",     "title": "คู่มือและแบบฟอร์ม",           "subtitle": "Download the guide relevant to your role" },
+    { "id": "documents", "nav": "เอกสารประกอบการเบิก",       "eyebrow": "REQUIRED DOCUMENTS",  "title": "เอกสารประกอบการเบิก",       "subtitle": "Required documents by role" },
+    { "id": "timeline",  "nav": "ขั้นตอนและช่วงเวลา",          "eyebrow": "PROCESS TIMELINE",    "title": "ขั้นตอนและช่วงเวลา",          "subtitle": "Monthly compensation payment schedule" }
   ]
 }

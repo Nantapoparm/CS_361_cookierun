@@ -1,25 +1,37 @@
-/* base.css — ตัวแปรสี, reset, typography (ใช้ทุกหน้า) */
+/* base.css — ตัวแปรดีไซน์, reset, typography
+   แก้สีทั้งเว็บได้จากบล็อก :root ด้านล่างที่เดียว */
 
 :root {
-  --navy-900: #0a1838;
-  --navy-800: #0f2455;
-  --navy-700: #16306b;
-  --gold: #f5c518;
-  --gold-dark: #e0b30c;
-  --gold-soft: #fffbeb;
+  /* สีหลัก */
+  --ink-900: #101828;   /* แถบบน / hero / footer */
+  --ink-800: #1a2438;   /* ป้ายกำกับพื้นเข้ม */
+  --gold: #eab308;
+  --gold-strong: #d9a406;
+  --gold-soft: #fefce8;  /* พื้นกล่องหมายเหตุ */
+  --gold-line: #fde68a;
 
-  --page: #f4f6fa;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+
+  /* พื้นหลังและเส้น */
+  --page: #f7f8fa;
   --card: #ffffff;
-  --line: #e3e8f0;
-  --line-soft: #eef1f6;
+  --line: #e8ecf2;
+  --line-soft: #f1f4f8;
+  --hover: #eef2f9;
 
-  --ink: #1b2437;
-  --ink-muted: #5b6780;
-  --ink-faint: #93a0b5;
+  /* ตัวอักษร */
+  --ink: #0f172a;
+  --ink-muted: #556378;
+  --ink-faint: #94a3b8;
 
-  --sidebar-w: 256px;
-  --radius: 10px;
-  --shadow: 0 1px 3px rgba(15, 36, 85, .06), 0 8px 24px rgba(15, 36, 85, .05);
+  /* ระยะ */
+  --sidebar-w: 258px;
+  --topbar-h: 56px;
+  --content-max: 880px;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .04);
 }
 
 * { box-sizing: border-box; }
@@ -30,7 +42,7 @@ body {
   margin: 0;
   font-family: 'IBM Plex Sans Thai', 'Noto Sans Thai', -apple-system, 'Segoe UI', Tahoma, sans-serif;
   font-size: 15px;
-  line-height: 1.65;
+  line-height: 1.7;
   color: var(--ink);
   background: var(--page);
   -webkit-font-smoothing: antialiased;
@@ -38,14 +50,12 @@ body {
 
 a { color: inherit; text-decoration: none; }
 ul { margin: 0; padding: 0; list-style: none; }
-h1, h2, h3, h4 { margin: 0; line-height: 1.35; }
+h1, h2, h3 { margin: 0; line-height: 1.35; }
 p { margin: 0; }
-
-.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+table { border-collapse: collapse; width: 100%; }
 
 /* ข้อความระหว่างโหลด / ตอนโหลดข้อมูลไม่สำเร็จ */
 .boot { padding: 80px 24px; text-align: center; color: var(--ink-muted); }
 
 /* โลโก้ */
-.mark { flex: none; }
-.mark path:not([fill]) { fill: var(--gold); }
+.mark { flex: none; display: block; }
