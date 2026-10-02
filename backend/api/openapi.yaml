@@ -15,6 +15,7 @@ x-amazon-apigateway-cors:
     - http://localhost:5500
     - http://localhost:8000
     # เพิ่มโดเมน CloudFront เมื่อสร้างเสร็จ
+  allowMethods:
     - GET
     - POST
     - PUT
@@ -24,9 +25,12 @@ x-amazon-apigateway-cors:
   maxAge: 3600
 
 # ---------------------------------------------------------------
-# หมายเหตุ: ใช้บัญชี AWS ร่วมกันผ่าน IAM Role
-# การตั้งค่า URI ของ Lambda จะใช้ตัวแปร ${aws:region} และ ${aws:accountId} 
-# เพื่อความปลอดภัยและหลีกเลี่ยงการ Hard-code ค่า Credential หรือ Account ID ลงใน Git
+# หมายเหตุ: ทีมใช้ AWS Account เดียวกันผ่าน IAM User/Group และ Role ตามสิทธิ์
+# ARN ของ Lambda ใช้ placeholder ACCOUNT_ID (ไม่ hard-code Account ID ลง Git)
+# แทนค่าก่อน import ด้วย:
+#   ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+#   sed "s/ACCOUNT_ID/$ACCOUNT_ID/g" openapi.yaml > /tmp/openapi-deploy.yaml
+# เหตุผล: API Gateway ไม่แทนค่า ${aws:region} / ${aws:accountId} ให้ตอน import
 # ---------------------------------------------------------------
 paths:
   /claims:
@@ -75,7 +79,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:${aws:region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${aws:region}:${aws:accountId}:function:cookierun-getClaims/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getClaims/invocations
     post:
       operationId: createClaim
       summary: สร้างคำขอใหม่หรือบันทึกร่าง
@@ -125,7 +129,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-createClaim/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-createClaim/invocations
 
   /claims/{id}:
     parameters:
@@ -167,7 +171,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getClaimById/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getClaimById/invocations
     put:
       operationId: updateClaim
       summary: แก้ไขคำขอที่ยังเป็นร่าง
@@ -219,7 +223,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-updateClaim/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-updateClaim/invocations
 
   /claims/{id}/submit:
     parameters:
@@ -263,7 +267,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-submitClaim/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-submitClaim/invocations
 
   /terms:
     get:
@@ -293,7 +297,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getTerms/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getTerms/invocations
 
   /rates:
     get:
@@ -325,7 +329,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getRates/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getRates/invocations
   /uploads/presigned-url:
     get:
       operationId: getUploadPresignedUrl
@@ -349,14 +353,14 @@ paths:
               example:
                 success: true
                 data:
-                  uploadUrl: "https://<bucket-name>.s3.amazonaws.com/uploads/12345-file.pdf?AWSAccessKeyId=...&Signature=...&Expires=..."
+                  uploadUrl: "https://<bucket-name>.s3.amazonaws.com/uploads/12345-file.pdf?X-Amz-Algorithm=...&X-Amz-Signature=...&X-Amz-Expires=300"
                   fileKey: "uploads/12345-file.pdf"
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getPresignedUrl/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getPresignedUrl/invocations
 
 components:
   responses:
