@@ -1,0 +1,467 @@
+openapi: 3.0.1
+info:
+  title: Teaching Compensation Claim API
+  description: API สำหรับระบบเบิกค่าตอบแทนการสอน (CS361 V2)
+  version: 2.0.0
+
+# ---------------------------------------------------------------
+# CORS (API Gateway HTTP API จัดการ Preflight OPTIONS ให้เอง)
+# หมายเหตุ: เมื่อเปิด CORS ที่ API Gateway แล้ว Lambda ไม่ต้องใส่ header CORS
+# ---------------------------------------------------------------
+x-amazon-apigateway-cors:
+  allowOrigins:
+    - http://cs361-teaching-compensation-claim-system.s3-website-us-east-1.amazonaws.com
+    - http://localhost:3000
+    - http://localhost:5500
+    - http://localhost:8000
+    # เพิ่มโดเมน CloudFront เมื่อสร้างเสร็จ
+    - GET
+    - POST
+    - PUT
+    - OPTIONS
+  allowHeaders:
+    - Content-Type
+  maxAge: 3600
+
+# ---------------------------------------------------------------
+# หมายเหตุ: ใช้บัญชี AWS ร่วมกันผ่าน IAM Role
+# การตั้งค่า URI ของ Lambda จะใช้ตัวแปร ${aws:region} และ ${aws:accountId} 
+# เพื่อความปลอดภัยและหลีกเลี่ยงการ Hard-code ค่า Credential หรือ Account ID ลงใน Git
+# ---------------------------------------------------------------
+paths:
+  /claims:
+    get:
+      operationId: listClaims
+      summary: ดึงรายการคำขอ (ใช้กับ Dashboard)
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+        - name: term
+          in: query
+          description: รหัสภาคการศึกษา เช่น 1-2569
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ClaimStatus' }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimListResponse' }
+              example:
+                success: true
+                data:
+                - id: c001
+                  userId: u001
+                  role: instructor
+                  term: 1-2569
+                  billingCycle: 1
+                  items:
+                  - date: '2026-09-15'
+                    courseCode: CS361
+                    hours: 3
+                    note: สอนปกติ
+                  status: draft
+                  totalHours: 3
+                  totalAmount: 3600
+                  createdAt: '2026-09-16T08:00:00Z'
+                  updatedAt: '2026-09-16T08:00:00Z'
+                  submittedAt: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:${aws:region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${aws:region}:${aws:accountId}:function:cookierun-getClaims/invocations
+    post:
+      operationId: createClaim
+      summary: สร้างคำขอใหม่หรือบันทึกร่าง
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClaimInput' }
+            example:
+              userId: u001
+              role: instructor
+              term: 1-2569
+              billingCycle: 1
+              items:
+              - date: '2026-09-15'
+                courseCode: CS361
+                hours: 3
+                note: สอนปกติ
+      responses:
+        '201':
+          description: สร้างสำเร็จ (status = draft)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimResponse' }
+              example:
+                success: true
+                data:
+                  id: c001
+                  userId: u001
+                  role: instructor
+                  term: 1-2569
+                  billingCycle: 1
+                  items:
+                  - date: '2026-09-15'
+                    courseCode: CS361
+                    hours: 3
+                    note: สอนปกติ
+                  status: draft
+                  totalHours: 3
+                  totalAmount: 3600
+                  createdAt: '2026-09-16T08:00:00Z'
+                  updatedAt: '2026-09-16T08:00:00Z'
+                  submittedAt: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-createClaim/invocations
+
+  /claims/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getClaim
+      summary: ดูรายละเอียดคำขอ (รวมสถานะ)
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimResponse' }
+              example:
+                success: true
+                data:
+                  id: c001
+                  userId: u001
+                  role: instructor
+                  term: 1-2569
+                  billingCycle: 1
+                  items:
+                  - date: '2026-09-15'
+                    courseCode: CS361
+                    hours: 3
+                    note: สอนปกติ
+                  status: draft
+                  totalHours: 3
+                  totalAmount: 3600
+                  createdAt: '2026-09-16T08:00:00Z'
+                  updatedAt: '2026-09-16T08:00:00Z'
+                  submittedAt: null
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getClaimById/invocations
+    put:
+      operationId: updateClaim
+      summary: แก้ไขคำขอที่ยังเป็นร่าง
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClaimInput' }
+            example:
+              userId: u001
+              role: instructor
+              term: 1-2569
+              billingCycle: 1
+              items:
+              - date: '2026-09-15'
+                courseCode: CS361
+                hours: 4
+                note: แก้ไขชั่วโมง
+      responses:
+        '200':
+          description: แก้ไขสำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimResponse' }
+              example:
+                success: true
+                data:
+                  id: c001
+                  userId: u001
+                  role: instructor
+                  term: 1-2569
+                  billingCycle: 1
+                  items:
+                  - date: '2026-09-15'
+                    courseCode: CS361
+                    hours: 4
+                    note: แก้ไขชั่วโมง
+                  status: draft
+                  totalHours: 4
+                  totalAmount: 4800
+                  createdAt: '2026-09-16T08:00:00Z'
+                  updatedAt: '2026-09-16T10:00:00Z'
+                  submittedAt: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-updateClaim/invocations
+
+  /claims/{id}/submit:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: submitClaim
+      summary: ยื่นคำขอ (draft -> submitted)
+      responses:
+        '200':
+          description: ยื่นสำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimResponse' }
+              example:
+                success: true
+                data:
+                  id: c001
+                  userId: u001
+                  role: instructor
+                  term: 1-2569
+                  billingCycle: 1
+                  items:
+                  - date: '2026-09-15'
+                    courseCode: CS361
+                    hours: 3
+                    note: สอนปกติ
+                  status: submitted
+                  totalHours: 3
+                  totalAmount: 3600
+                  createdAt: '2026-09-16T08:00:00Z'
+                  updatedAt: '2026-09-17T09:30:00Z'
+                  submittedAt: '2026-09-17T09:30:00Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-submitClaim/invocations
+
+  /terms:
+    get:
+      operationId: listTerms
+      summary: ดึงข้อมูลภาคการศึกษาและรอบการเบิก
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenericListResponse' }
+              example:
+                success: true
+                data:
+                - id: 1-2569
+                  name: ภาคการศึกษาที่ 1/2569
+                  billingCycles:
+                  - cycle: 1
+                    description: ส่งเอกสารภายในวันที่ 5 ของเดือนถัดไป
+                    lastDay: 5
+                  - cycle: 2
+                    description: ส่งเอกสารระหว่างวันที่ 6 ถึง 10
+                    startDay: 6
+                    lastDay: 10
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getTerms/invocations
+
+  /rates:
+    get:
+      operationId: listRates
+      summary: ดึงอัตราค่าตอบแทน
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenericListResponse' }
+              example:
+                success: true
+                data:
+                - role: instructor
+                  ratePerHour: 1200
+                  maxHours: 45
+                  maxHoursHalfLoad: null
+                - role: ta
+                  ratePerHour: 420
+                  maxHours: 45
+                  maxHoursHalfLoad: 22.5
+                - role: student_helper
+                  ratePerHour: 40
+                  maxHours: 253
+                  maxHoursHalfLoad: 127
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getRates/invocations
+  /uploads/presigned-url:
+    get:
+      operationId: getUploadPresignedUrl
+      summary: ขอ S3 Presigned URL สำหรับอัปโหลดไฟล์หลักฐาน (เช่น PDF, รูปภาพ)
+      parameters:
+        - name: fileName
+          in: query
+          required: true
+          description: ชื่อไฟล์ที่ต้องการอัปโหลด
+          schema: { type: string }
+        - name: contentType
+          in: query
+          required: true
+          description: MIME Type ของไฟล์ เช่น image/jpeg, application/pdf
+          schema: { type: string }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  uploadUrl: "https://<bucket-name>.s3.amazonaws.com/uploads/12345-file.pdf?AWSAccessKeyId=...&Signature=...&Expires=..."
+                  fileKey: "uploads/12345-file.pdf"
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cs361-getPresignedUrl/invocations
+
+components:
+  responses:
+    BadRequest:
+      description: ข้อมูลที่ส่งมาไม่ถูกต้อง
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            success: false
+            error: { code: VALIDATION_ERROR, message: "hours ต้องมากกว่า 0" }
+    NotFound:
+      description: ไม่พบข้อมูล
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            success: false
+            error: { code: NOT_FOUND, message: "ไม่พบคำขอ" }
+    Conflict:
+      description: สถานะปัจจุบันไม่อนุญาตให้ทำรายการนี้ (เช่น แก้ไขคำขอที่ยื่นแล้ว)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            success: false
+            error: { code: INVALID_STATE, message: "คำขอนี้ถูกยื่นแล้ว ไม่สามารถแก้ไขได้" }
+    ServerError:
+      description: ข้อผิดพลาดฝั่งเซิร์ฟเวอร์ (เช่น เชื่อมต่อ RDS ไม่ได้)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            success: false
+            error: { code: INTERNAL_ERROR, message: "เกิดข้อผิดพลาดภายในระบบ" }
+
+  schemas:
+    ClaimStatus:
+      type: string
+      enum: [draft, submitted]
+    ClaimInput:
+      type: object
+      required: [userId, role, term, billingCycle, items]
+      properties:
+        userId: { type: string, example: "u001" }
+        role:
+          type: string
+          enum: [instructor, ta, student_helper]
+        term: { type: string, example: "1-2569" }
+        billingCycle:
+          type: integer
+          enum: [1, 2]
+        items:
+          type: array
+          items:
+            type: object
+            required: [date, hours]
+            properties:
+              date: { type: string, format: date, example: "2026-09-15" }
+              courseCode: { type: string, example: "CS361" }
+              hours: { type: number, example: 3 }
+              note: { type: string }
+        attachments:
+          type: array
+          description: รายการ File Key หรือ URL ของหลักฐานที่จำเป็น
+          items:
+            type: string
+          example: ["uploads/12345-file.pdf"]
+    Claim:
+      allOf:
+        - $ref: '#/components/schemas/ClaimInput'
+        - type: object
+          properties:
+            id: { type: string, example: "c001" }
+            status: { $ref: '#/components/schemas/ClaimStatus' }
+            totalHours: { type: number }
+            totalAmount: { type: number }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            submittedAt: { type: string, format: date-time, nullable: true }
+    ClaimResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { $ref: '#/components/schemas/Claim' }
+    ClaimListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Claim' }
+    GenericListResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { type: object }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
