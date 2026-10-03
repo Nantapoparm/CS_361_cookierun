@@ -10,11 +10,10 @@ info:
 # ---------------------------------------------------------------
 x-amazon-apigateway-cors:
   allowOrigins:
-    - http://cs361-teaching-compensation-claim-system.s3-website-us-east-1.amazonaws.com
+    - https://d2ye2fegyyx6ls.cloudfront.net
     - http://localhost:3000
     - http://localhost:5500
     - http://localhost:8000
-    # เพิ่มโดเมน CloudFront เมื่อสร้างเสร็จ
   allowMethods:
     - GET
     - POST
@@ -22,6 +21,7 @@ x-amazon-apigateway-cors:
     - OPTIONS
   allowHeaders:
     - Content-Type
+    - Authorization   # Login: ส่ง token ผ่าน header Authorization
   maxAge: 3600
 
 # ---------------------------------------------------------------
@@ -334,6 +334,7 @@ paths:
     get:
       operationId: getUploadPresignedUrl
       summary: ขอ S3 Presigned URL สำหรับอัปโหลดไฟล์หลักฐาน (เช่น PDF, รูปภาพ)
+      description: Frontend อัปโหลดไฟล์ตรงด้วย HTTP PUT ไปที่ uploadUrl เข้า bucket สำหรับไฟล์หลักฐานโดยเฉพาะ (แยกจาก bucket ของ Frontend)
       parameters:
         - name: fileName
           in: query
@@ -353,7 +354,7 @@ paths:
               example:
                 success: true
                 data:
-                  uploadUrl: "https://<bucket-name>.s3.amazonaws.com/uploads/12345-file.pdf?X-Amz-Algorithm=...&X-Amz-Signature=...&X-Amz-Expires=300"
+                  uploadUrl: "https://<uploads-bucket-name>.s3.amazonaws.com/uploads/12345-file.pdf?X-Amz-Algorithm=...&X-Amz-Signature=...&X-Amz-Expires=300"
                   fileKey: "uploads/12345-file.pdf"
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:

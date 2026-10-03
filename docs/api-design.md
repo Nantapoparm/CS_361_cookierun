@@ -60,9 +60,35 @@
 - **Requirement:** ผู้ใช้งานต้องสามารถแนบไฟล์หลักฐานเข้าสู่ระบบได้อย่างปลอดภัย โดยที่ข้อมูลต้องไม่หลุดรั่ว
 - **Decision:** ใช้กลไกการให้สิทธิ์ชั่วคราวผ่าน S3 Presigned URL สำหรับการอัปโหลดไฟล์
 - **Trade-off:** สิ่งที่ได้คือลดภาระและลด Latency ของ API Gateway/Lambda ลงได้อย่างมาก เพราะ Frontend จะยิงไฟล์ตรงเข้า S3 ผ่าน URL ชั่วคราว สิ่งที่ต้องแลกมาคือความซับซ้อนในการพัฒนาที่เพิ่มขึ้น (Frontend ต้องยิง Request 2 รอบ: ขอ URL และอัปโหลดไฟล์)
+- **ต้องแยก bucket ของไฟล์หลักฐานออกจาก bucket ของ Frontend:** ไฟล์หลักฐานมีข้อมูลส่วนบุคคล และ bucket ของ Frontend ถูก CI/CD sync ทับอยู่เสมอ (ไฟล์ที่ผู้ใช้อัปโหลดอาจถูกลบหรือถูกเขียนทับ) จึงใช้ bucket แยก เป็น private และปิด Public Access
+- **ข้อกำหนดที่ต้องตั้งค่าเพิ่ม:** bucket ของไฟล์หลักฐานต้องตั้ง CORS (อนุญาต `PUT` จาก Origin ของ Frontend คือโดเมน CloudFront) แยกจาก CORS ของ API Gateway และ Lambda `cookierun-getPresignedUrl` ต้องมีสิทธิ์ `s3:PutObject` กับ prefix `uploads/` ของ bucket นั้นเท่านั้น
 
-### 2.3 การทำงานร่วมกันผ่าน IAM Role แบบ Dynamic ARN
+### 2.3 การทำงานร่วมกันใน AWS Account เดียวผ่าน IAM User/Group
 
-- **Requirement:** ทีมพัฒนา V2 ใน AWS Account บัญชีรวมผ่านโครงสร้างผู้ใช้งานและ IAM Role
-- **Decision:** ไม่ใช้การ Hard-code ค่า AWS Account ID ในไฟล์ `openapi.yaml` แต่ใช้ตัวแปร `${aws:accountId}` และ `${aws:region}` แทน
-- **Trade-off:** ช่วยเพิ่มความปลอดภัยและทำตามหลัก Security (Principle of Least Privilege) ป้องกันการหลุดรั่วของข้อมูลประจำตัวลงใน Git Repository และช่วยให้การทำ Infrastructure Integration ยืดหยุ่นมากขึ้น
+- **Requirement:** ทีมพัฒนา V2 ใน AWS Account เดียวกัน โดยสมาชิกแต่ละคนมีสิทธิ์เฉพาะงานของตนเอง ไม่ใช้สิทธิ์ผู้ดูแลระบบร่วมกัน
+- **Decision:** แบ่งสิทธิ์ด้วย IAM Group ตามหน้าที่ (เช่น `ApiDev` ของงาน API Gateway) และไม่ Hard-code AWS Account ID ลงใน `openapi.yaml` แต่ใช้ placeholder `ACCOUNT_ID` แล้วแทนค่าตอนนำเข้าด้วยคำสั่ง `aws sts get-caller-identity` และ `sed` (ขั้นตอนอยู่ในคอมเมนต์ต้นไฟล์)
+- **เหตุผลที่ไม่ใช้ `${aws:accountId}`:** API Gateway ไม่แทนค่าตัวแปรรูปแบบนี้ให้ตอน Import จึงทำให้ ARN ของ Lambda ไม่ถูกต้อง
+- **Trade-off:** สิ่งที่ได้คือไม่มี Account ID ในไฟล์ใน Git, แยกสิทธิ์ตามหน้าที่ได้ตามหลัก Least Privilege และตรวจสอบย้อนหลังได้ว่าใครทำอะไร สิ่งที่ต้องแลกคือมีขั้นตอนแทนค่าก่อน Import และต้องดูแลสิทธิ์ของแต่ละ Group ให้เพียงพอ (เช่น สิทธิ์ให้ API Gateway เรียก Lambda ด้วย `lambda:AddPermission`)
+
+### 2.4 Origin ของ Frontend และ CORS
+
+- **Requirement:** เบราว์เซอร์ของผู้ใช้ต้องเรียก API Gateway ข้ามโดเมนได้ โดยไม่เปิดกว้างเกินจำเป็น
+- **Decision:** อนุญาตเฉพาะ Origin `https://d2ye2fegyyx6ls.cloudfront.net` (Frontend ผ่าน CloudFront) และ `http://localhost:3000`, `:5500`, `:8000` สำหรับพัฒนา ไม่ใช้ `*` และไม่ใช้ S3 Website Endpoint เดิม เพราะ bucket ของ Frontend เป็น private และผู้ใช้เข้าผ่าน CloudFront เท่านั้น
+- **Headers:** `Content-Type` และ `Authorization` (เพิ่มไว้ล่วงหน้าสำหรับ V3 ที่ Login แล้วส่ง token ผ่าน header นี้)
+- **Trade-off:** การเพิ่ม `Authorization` ตั้งแต่ V2 ยังไม่มีผลใช้งานจริงและไม่เพิ่มความเสี่ยง แต่ทำให้ไม่ต้องแก้ CORS และ import ใหม่ตอน V3 ส่วน localhost ควรเอาออกก่อนส่ง V7 เพราะไม่ควรเปิดค้างบนระบบจริง
+
+## 3. Stage และ Access Log (V2)
+
+| รายการ | ค่า |
+|---|---|
+| API | `Teaching Compensation Claim API` (HTTP API, ApiId `39eee8bl4b`, us-east-1) |
+| Stage | `$default` (Auto-deploy เปิดอยู่) URL จึงไม่มี prefix ตรงกับ Contract (`/claims` ไม่ใช่ `/prod/claims`) |
+| Invoke URL | `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com` |
+| Access Log | CloudWatch Logs กลุ่ม `/aws/apigateway/cookierun-claim-api` (เก็บ 7 วันเพื่อคุมค่าใช้จ่าย) |
+| รูปแบบ Log | JSON: requestId, ip, requestTime, httpMethod, routeKey, status, protocol, responseLength, extendedRequestId |
+
+สร้างด้วยสคริปต์ [`backend/api/scripts/setup-stage.sh`](../backend/api/scripts/setup-stage.sh) (รันซ้ำได้) เพื่อให้สร้างซ้ำในบัญชีอื่นได้ตามแนวทาง Infrastructure as Code ใน V5
+
+**สิทธิ์ที่ผู้เปิด Log ต้องมี:** `logs:CreateLogDelivery`, `logs:PutResourcePolicy`, `logs:UpdateLogDelivery`, `logs:DeleteLogDelivery`, `logs:CreateLogGroup`, `logs:DescribeResourcePolicies`, `logs:GetLogDelivery`, `logs:ListLogDeliveries` และ `logs:PutRetentionPolicy` (ใช้ตั้งอายุ Log) กำหนดไว้เป็น policy [`backend/api/iam/api-logs-permission.json`](../backend/api/iam/api-logs-permission.json) สำหรับแนบกับกลุ่ม `ApiDev`
+
+**พฤติกรรมที่ตรวจพบก่อนผูก Lambda (ทดสอบเมื่อ 2026-10-03):** เรียก route ที่ไม่มีใน Contract ได้ `404`, เรียก route ที่มีแต่ยังไม่มี Lambda ได้ `500` โดย Access Log บันทึกเฉพาะคำขอที่ตรงกับ route ใน Contract (เช่น `GET /rates`, `GET /claims/{id}`) ส่วนคำขอไปยัง path ที่ไม่มี route ตรง (404) ไม่ปรากฏใน Log จึงตรวจการเรียกผิด path ไม่ได้จาก Access Log นี้ และ `apigw-requestid` ใน response ตรงกับ `requestId` ใน Log ใช้ไล่หาคำขอได้
