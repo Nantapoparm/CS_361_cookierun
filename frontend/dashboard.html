@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คำขอของฉัน | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/claims.css">
+</head>
+<body>
+  <header class="topbar" data-mount="topbar"></header>
+  <main class="main"><div class="content">
+
+    <div class="page-head">
+      <h2>คำขอของฉัน</h2>
+      <a class="btn" href="form.html">สร้างคำขอใหม่</a>
+    </div>
+
+    <div class="filters">
+      <select id="fTerm" aria-label="ภาคการศึกษา"><option value="">ทุกภาคการศึกษา</option></select>
+      <select id="fCycle" aria-label="รอบการเบิก">
+        <option value="">ทุกรอบการเบิก</option>
+        <option value="1">รอบที่ 1</option>
+        <option value="2">รอบที่ 2</option>
+      </select>
+      <select id="fCourse" aria-label="วิชา"><option value="">ทุกวิชา</option></select>
+      <select id="fStatus" aria-label="สถานะ"><option value="">ทุกสถานะ</option></select>
+    </div>
+
+    <div id="msg"></div>
+    <div class="table-card">
+      <table class="rate-table claims-table">
+        <thead><tr><th>เลขที่</th><th>รอบการเบิก</th><th>วิชา</th><th>ภาคการศึกษา</th><th>ชั่วโมง</th><th>ยอดเบิก</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+        <tfoot id="foot"></tfoot>
+      </table>
+    </div>
+
+    <div class="pager-bar">
+      <span class="pager-info" id="pageInfo"></span>
+      <nav class="pager" id="pager" aria-label="เลือกหน้า"></nav>
+      <label class="pager-size">แสดงต่อหน้า
+        <select id="pageSize" aria-label="จำนวนรายการต่อหน้า">
+          <option value="5" selected>5</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+        </select>
+      </label>
+    </div>
+  </div></main>
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/dashboard.js"></script>
+</body>
+</html>

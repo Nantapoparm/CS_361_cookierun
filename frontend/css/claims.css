@@ -1,0 +1,145 @@
+/* claims.css — เฉพาะหน้า V2 (dashboard / form / detail) ใช้ตัวแปรสีจาก base.css */
+
+/* ดัน footer ลงล่างสุดเมื่อเนื้อหาสั้น (โหลดเฉพาะหน้า V2 จึงไม่กระทบ index.html) */
+body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+body > .main { flex: 1; }
+
+
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.page-head h2 { font-size: 24px; }
+
+/* ปุ่ม */
+.btn {
+  display: inline-block; background: var(--gold); color: var(--ink-900);
+  font-family: inherit; font-size: 14px; font-weight: 700; border: 0; border-radius: 8px;
+  padding: 11px 18px; cursor: pointer; transition: background .15s;
+}
+.btn:hover { background: var(--gold-strong); }
+.btn.ghost { background: var(--card); border: 1px solid var(--line); color: var(--ink); font-weight: 600; }
+.btn.ghost:hover { border-color: var(--gold); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn:focus-visible, .field :is(input, select, textarea):focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+
+/* ตัวกรอง + ตาราง */
+.filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.filters select, .field :is(input, select, textarea) {
+  font-family: inherit; font-size: 14px; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+}
+.claims-table td { vertical-align: middle; }
+.claims-table td:last-child, .claims-table th:last-child { text-align: right; }
+.claims-table a.link { color: var(--ink); font-weight: 600; text-decoration: underline; }
+.empty { text-align: center; color: var(--ink-muted); padding: 40px 22px !important; }
+
+/* สถานะ */
+.status {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; padding: 3px 12px 3px 10px;
+  border: 1px solid; border-radius: 999px;
+}
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status.draft { background: var(--gold-soft); border-color: var(--gold-line); color: #854d0e; }
+.status.pending { background: #eff8ff; border-color: #b2ddff; color: #175cd3; }
+.status.approved { background: #ecfdf3; border-color: #abefc6; color: #067647; }
+.status.rejected { background: var(--danger-soft); border-color: var(--danger-line); color: #b42318; }
+.status.returned { background: #f4f3ff; border-color: #d9d6fe; color: #5925dc; }
+
+/* ฟอร์ม */
+.form-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.field { display: grid; gap: 6px; font-size: 13.5px; }
+.field > label { font-weight: 600; }
+.field .hint { font-size: 12px; color: var(--ink-faint); }
+.field.full { grid-column: 1 / -1; }
+.field .calc { font-size: 22px; font-weight: 700; padding: 6px 0; }
+.files li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; background: var(--line-soft); border-radius: 8px; font-size: 13px; }
+.files button { border: 0; background: none; color: var(--danger); cursor: pointer; font-family: inherit; }
+
+/* หน้ารายละเอียด */
+.detail-list { display: grid; grid-template-columns: 180px 1fr; gap: 12px 20px; font-size: 14px; }
+.detail-list dt { color: var(--ink-muted); }
+.detail-list dd { margin: 0; font-weight: 600; }
+.steps { display: flex; gap: 10px; margin-bottom: 22px; }
+.steps span { flex: 1; text-align: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--line-soft); color: var(--ink-faint); font-size: 13px; font-weight: 600; }
+.steps span.done { background: #ecfdf3; border-color: #abefc6; color: #067647; }
+#msg .btn { margin-top: 12px; }
+
+@media (max-width: 640px) {
+  .form-grid, .detail-list { grid-template-columns: 1fr; }
+  .page-head { flex-direction: column; align-items: flex-start; }
+  .table-card { overflow-x: auto; }
+  .claims-table { min-width: 760px; }
+}
+
+/* ---------- V2 ตาม schema DB: รายการงาน, ยอดรวม, ขั้นสถานะ ---------- */
+.who { margin-bottom: 18px; font-size: 14px; color: var(--ink-muted); }
+.who b { color: var(--ink); }
+.sub { font-size: 16px; font-weight: 700; margin: 26px 0 12px; }
+.item {
+  display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1.2fr auto; gap: 12px; align-items: end;
+  padding: 14px; margin-bottom: 10px; background: var(--page); border: 1px solid var(--line); border-radius: 10px;
+}
+.item .field { min-width: 0; }
+.item .hint { grid-column: 1 / -1; font-size: 12px; color: var(--ink-faint); }
+.item .hint:empty { display: none; }
+.field :is(input, select, textarea) { width: 100%; min-width: 0; }
+.item .calc { font-size: 14px; padding: 10px 0; }
+.item .rm { border: 0; background: none; color: var(--danger); cursor: pointer; font-family: inherit; padding: 10px 4px; }
+.totals { display: flex; flex-wrap: wrap; gap: 32px; margin: 18px 0 22px; font-size: 13px; color: var(--ink-muted); }
+.totals b { display: block; font-size: 22px; color: var(--ink); }
+.t-sub { font-size: 12px; font-weight: 400; color: var(--ink-faint); }
+.sub + .table-card { margin-bottom: 0; }
+.form-card + .sub { margin-top: 28px; }
+
+.steps span.now { background: var(--card); border-color: var(--ink-900); color: var(--ink); }
+.steps span.approved { background: #ecfdf3; border-color: #abefc6; color: #067647; }
+.steps span.rejected { background: var(--danger-soft); border-color: var(--danger-line); color: #b42318; }
+.steps span.returned { background: #f4f3ff; border-color: #d9d6fe; color: #5925dc; }
+
+@media (max-width: 900px) {
+  .item { grid-template-columns: 1fr 1fr; }
+}
+/* ระยะเวลาแยกชั่วโมง / นาที */
+.dur { display: flex; gap: 6px; }
+.dur input { flex: 1; min-width: 0; }
+
+/* เตือนเวลาซ้อนในฟอร์ม + จัดกลุ่มตามวิชาในหน้ารายละเอียด */
+.item .warn { grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; color: var(--danger); }
+.item .warn:empty { display: none; }
+.claims-table.grouped tr.grp td { background: var(--line-soft); font-weight: 700; }
+.claims-table.grouped tr:not(.grp) td:first-child { padding-left: 38px; }
+.form-card .table-card { box-shadow: none; }
+
+/* ค่าที่ระบบกำหนด (อ่านอย่างเดียว) */
+.field .static {
+  font-size: 14px; font-weight: 600; padding: 10px 12px; min-height: 42px;
+  background: var(--line-soft); border: 1px solid var(--line); border-radius: 8px;
+}
+
+/* ---------- แบ่งหน้า + แถวรวมในหน้า "คำขอของฉัน" ---------- */
+/* แถวรวม (แถวเดียว) ย่อให้เล็กกว่าช่องอื่น — ใช้ tfoot td เพราะ components.css กำหนด padding ของ .rate-table td ไว้ */
+.claims-table tfoot td {
+  padding: 5px 12px; font-size: 12px; line-height: 1.3; font-weight: 700;
+  background: var(--line-soft); border-top: 1px solid var(--line);
+}
+.claims-table tfoot td:last-child { text-align: left; }
+.claims-table tfoot .t-sub { display: block; font-size: 10.5px; line-height: 1.2; }
+.claims-table tfoot td:last-child { text-align: left; }
+.pager-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; font-size: 13px; color: var(--ink-muted); }
+.pager { display: flex; flex-wrap: wrap; gap: 6px; }
+.pager .pg {
+  min-width: 36px; padding: 7px 12px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.pager button.pg:hover:not(:disabled) { border-color: var(--gold); }
+.pager .pg.on { background: var(--ink-900); border-color: var(--ink-900); color: #fff; }
+.pager .pg:disabled { opacity: .45; cursor: not-allowed; }
+.pager .pg.gap { border: 0; background: none; min-width: 0; padding: 7px 2px; cursor: default; }
+.pager .pg:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
+.pager-size { display: flex; align-items: center; gap: 8px; }
+.pager-size select { font-family: inherit; font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+
+@media (max-width: 640px) {
+  .pager-bar { flex-direction: column; align-items: flex-start; }
+}

@@ -22,8 +22,8 @@
     "label": "หัวข้อเนื้อหา",
     "login": {
       "text": "เข้าสู่ระบบ",
-      "enabled": false,
-      "url": "",
+      "enabled": true,
+      "url": "dashboard.html",
       "disabledHint": "ระบบเข้าสู่ระบบจะเปิดใช้งานในเวอร์ชันถัดไป"
     }
   },

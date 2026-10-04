@@ -1,7 +1,18 @@
 // layout.js — ส่วนโครงของหน้า: แถบบน, hero, สารบัญ, footer และการไฮไลต์หัวข้อตามการเลื่อน
 
+// เมนูหลักบน topbar — match = ชื่อไฟล์หน้าที่ถือว่าอยู่ในเมนูนี้ (form/detail นับเป็น "คำขอของฉัน")
+const TOP_NAV = [
+  { href: 'index.html', text: 'ข้อมูลการเบิก', match: ['', 'index.html'] },
+  { href: 'dashboard.html', text: 'คำขอของฉัน', match: ['dashboard.html', 'form.html', 'detail.html'] }
+];
+
 function renderTopbar(site) {
   const m = site.meta;
+  const page = location.pathname.split('/').pop();
+  const nav = TOP_NAV.map((n) => {
+    const on = n.match.includes(page);
+    return `<a href="${n.href}" class="${on ? 'active' : ''}"${on ? ' aria-current="page"' : ''}>${esc(n.text)}</a>`;
+  }).join('');
   mount('topbar', `
     <div class="brand">
       <img class="brand-logo" src="${esc(m.logo)}" alt="${esc(m.logoAlt)}">
@@ -10,6 +21,7 @@ function renderTopbar(site) {
         <span class="brand-sub" style="display:block">${esc(m.brandSub)}</span>
       </span>
     </div>
+    <nav class="topnav" aria-label="เมนูหลัก">${nav}</nav>
     <div class="org">${esc(m.org)} | ${esc(m.academicYear)}</div>`);
 }
 
