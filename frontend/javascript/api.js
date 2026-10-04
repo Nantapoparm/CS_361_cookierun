@@ -6,7 +6,7 @@
 const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
   USE_MOCK: false,
-  BASE_URL: 'https://xxxx.execute-api.us-east-1.amazonaws.com', // ใส่ URL ของ API Gateway จริง (ไม่ต้องมี / ท้าย)
+  BASE_URL: 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com', // ใส่ URL ของ API Gateway จริง (ไม่ต้องมี / ท้าย)
   // ชั่วคราว: ยังไม่มี login → ผู้ใช้คนเดียว (role: instructor | ta | student_helper)
   USER: { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'ta', halfLoad: true }
 };
