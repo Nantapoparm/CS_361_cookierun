@@ -22,6 +22,23 @@
 .brand-sub { font-size: 11px; color: rgba(255, 255, 255, .55); letter-spacing: .03em; }
 .topbar .org { font-size: 12px; color: rgba(255, 255, 255, .62); }
 
+/* ---------- เมนูหลักบน topbar ---------- */
+
+.topnav { display: flex; align-self: stretch; gap: 4px; }
+.topnav a {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 3px solid transparent;
+  color: rgba(255, 255, 255, .62);
+  font-size: 14px;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.topnav a:hover { color: #fff; }
+.topnav a.active { color: #fff; font-weight: 600; border-bottom-color: var(--gold); }
+.topnav a:focus-visible { outline: 2px solid var(--gold); outline-offset: -4px; }
+
 /* ---------- โครง sidebar + เนื้อหา ---------- */
 
 .shell { display: grid; grid-template-columns: var(--sidebar-w) 1fr; align-items: start; }
@@ -145,5 +162,7 @@
 @media (max-width: 640px) {
   .topbar { padding: 0 16px; }
   .topbar .org { display: none; }
+  .topbar .brand-sub { display: none !important; } /* ทับ inline style ใน renderTopbar */
+  .topnav a { padding: 0 10px; font-size: 13px; }
   .section-head h2 { font-size: 21px; }
 }

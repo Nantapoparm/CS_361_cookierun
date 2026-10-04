@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สร้างคำขอ | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/claims.css">
+</head>
+<body>
+  <header class="topbar" data-mount="topbar"></header>
+  <main class="main"><div class="content">
+
+    <div class="page-head">
+      <h2 id="title">สร้างคำขอใหม่</h2>
+      <a class="btn ghost" href="dashboard.html">กลับรายการคำขอ</a>
+    </div>
+
+    <p class="who" id="who"></p>
+    <div id="msg"></div>
+
+    <div class="form-card">
+      <div class="form-grid">
+        <div class="field">
+          <label for="roleSel">บทบาท</label>
+          <select id="roleSel"><option value="">เลือกบทบาท</option></select>
+          <span class="hint" id="roleHint"></span>
+        </div>
+        <div class="field">
+          <label for="termSel">ภาคการศึกษา</label>
+          <select id="termSel"><option value="">เลือกภาคการศึกษา</option></select>
+          <span class="hint" id="termHint"></span>
+        </div>
+        <div class="field">
+          <label for="cycleSel">รอบการเบิก</label>
+          <select id="cycleSel" disabled><option value="">เลือกรอบการเบิก</option></select>
+          <span class="hint" id="cycleHint"></span>
+        </div>
+        <div class="field">
+          <label for="course">รหัสวิชา</label>
+          <input type="text" id="course" maxlength="20" placeholder="เช่น CS361">
+          <span class="hint"></span>
+        </div>
+      </div>
+
+      <h3 class="sub">รายการงาน</h3>
+      <div id="items"></div>
+      <button type="button" class="btn ghost" id="addItem">เพิ่มรายการงาน</button>
+
+      <div class="totals">
+        <div>ชั่วโมงรวม<b id="totalHours">0</b></div>
+        <div>ยอดเบิกรวม<b id="totalAmount">0 บาท</b></div>
+      </div>
+
+      <h3 class="sub">ไฟล์เพิ่มเติม</h3>
+      <div class="field">
+        <label for="file">แนบไฟล์ (PDF, JPG, PNG ไม่เกิน 5 MB)</label>
+        <input type="file" id="file" accept="application/pdf,image/jpeg,image/png">
+      </div>
+      <ul class="files" id="files"></ul>
+
+      <div class="actions">
+        <button type="button" class="btn ghost" id="btnDraft">บันทึกร่าง</button>
+        <button type="button" class="btn" id="btnSubmit">ยื่นคำขอ</button>
+      </div>
+    </div>
+  </div></main>
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/form.js"></script>
+</body>
+</html>
