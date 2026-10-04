@@ -79,16 +79,87 @@
 
 ## 3. Stage และ Access Log (V2)
 
+### 3.1 การตั้งค่าที่ใช้งานอยู่
+
 | รายการ | ค่า |
 |---|---|
-| API | `Teaching Compensation Claim API` (HTTP API, ApiId `39eee8bl4b`, us-east-1) |
-| Stage | `$default` (Auto-deploy เปิดอยู่) URL จึงไม่มี prefix ตรงกับ Contract (`/claims` ไม่ใช่ `/prod/claims`) |
-| Invoke URL | `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com` |
-| Access Log | CloudWatch Logs กลุ่ม `/aws/apigateway/cookierun-claim-api` (เก็บ 7 วันเพื่อคุมค่าใช้จ่าย) |
-| รูปแบบ Log | JSON: requestId, ip, requestTime, httpMethod, routeKey, status, protocol, responseLength, extendedRequestId |
+| API | `Teaching Compensation Claim API` (HTTP API, ApiId `39eee8bl4b`) |
+| Region | `us-east-1` (ตามที่ทีมตกลงใน Issue S3 Bucket) |
+| Stage | `$default` เปิด Auto-deploy ไว้ จึงไม่มี prefix ของ Stage ใน URL (`/claims` ไม่ใช่ `/prod/claims`) ตรงกับ Contract |
+| **Invoke URL** | `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com` |
+| Access Log | CloudWatch Logs กลุ่ม `/aws/apigateway/cookierun-claim-api` |
+| อายุการเก็บ Log | 7 วัน (ลดค่าเก็บ Log ในบัญชีที่ใช้ร่วมกัน) |
+| สร้างด้วย | [`backend/api/scripts/setup-stage.sh`](../backend/api/scripts/setup-stage.sh) (รันซ้ำได้) |
 
-สร้างด้วยสคริปต์ [`backend/api/scripts/setup-stage.sh`](../backend/api/scripts/setup-stage.sh) (รันซ้ำได้) เพื่อให้สร้างซ้ำในบัญชีอื่นได้ตามแนวทาง Infrastructure as Code ใน V5
+### 3.2 วิธีเรียกใช้ API
 
-**สิทธิ์ที่ผู้เปิด Log ต้องมี:** `logs:CreateLogDelivery`, `logs:PutResourcePolicy`, `logs:UpdateLogDelivery`, `logs:DeleteLogDelivery`, `logs:CreateLogGroup`, `logs:DescribeResourcePolicies`, `logs:GetLogDelivery`, `logs:ListLogDeliveries` และ `logs:PutRetentionPolicy` (ใช้ตั้งอายุ Log) กำหนดไว้เป็น policy [`backend/api/iam/api-logs-permission.json`](../backend/api/iam/api-logs-permission.json) สำหรับแนบกับกลุ่ม `ApiDev`
+Frontend ใช้ Invoke URL ข้างบนเป็น base URL แล้วต่อด้วย route ตาม Contract เช่น
 
-**พฤติกรรมที่ตรวจพบก่อนผูก Lambda (ทดสอบเมื่อ 2026-10-03):** เรียก route ที่ไม่มีใน Contract ได้ `404`, เรียก route ที่มีแต่ยังไม่มี Lambda ได้ `500` โดย Access Log บันทึกเฉพาะคำขอที่ตรงกับ route ใน Contract (เช่น `GET /rates`, `GET /claims/{id}`) ส่วนคำขอไปยัง path ที่ไม่มี route ตรง (404) ไม่ปรากฏใน Log จึงตรวจการเรียกผิด path ไม่ได้จาก Access Log นี้ และ `apigw-requestid` ใน response ตรงกับ `requestId` ใน Log ใช้ไล่หาคำขอได้
+```bash
+curl -i https://39eee8bl4b.execute-api.us-east-1.amazonaws.com/rates
+```
+
+Frontend (บน CloudFront) เรียก API Gateway โดยตรง ไม่ผ่าน CloudFront ดังนั้นต้องตั้ง CORS ตามหัวข้อ 2.4 เบราว์เซอร์จึงเรียกได้
+
+### 3.3 Access Log
+
+**รูปแบบ:** JSON หนึ่งบรรทัดต่อหนึ่งคำขอที่ตรงกับ route ใน Contract
+
+| ฟิลด์ | ความหมาย |
+|---|---|
+| `requestId` | รหัสคำขอ ตรงกับ header `apigw-requestid` ใน response ใช้ไล่หาคำขอที่ผู้ใช้แจ้งปัญหา |
+| `ip` | IP ของผู้เรียก |
+| `requestTime` | เวลาที่รับคำขอ |
+| `httpMethod` | เช่น `GET`, `POST` |
+| `routeKey` | route ที่ตรงกับคำขอ เช่น `GET /claims/{id}` |
+| `status` | HTTP status ที่ API Gateway ตอบกลับ |
+| `protocol` | เวอร์ชัน HTTP |
+| `responseLength` | ขนาด response (ไบต์) |
+| `extendedRequestId` | รหัสคำขอแบบขยาย ใช้อ้างอิงกับฝ่ายสนับสนุนของ AWS |
+
+ตัวอย่างบรรทัด Log (IP ถูกเบลอ):
+
+```json
+{"requestId":"ErGlsg1YoAMEMmw=","ip":"x.x.x.x","requestTime":"03/Oct/2026:15:24:19 +0000","httpMethod":"GET","routeKey":"GET /rates","status":"500","protocol":"HTTP/1.1","responseLength":"35"}
+```
+
+**วิธีดู Log**
+
+```bash
+# ดู Log ย้อนหลัง 15 นาที
+aws logs tail /aws/apigateway/cookierun-claim-api --since 15m --region us-east-1
+
+# ไล่คำขอด้วย requestId ที่ได้จาก header apigw-requestid
+aws logs tail /aws/apigateway/cookierun-claim-api --since 1h --region us-east-1 | grep "<requestId>"
+```
+
+หรือใน Console: CloudWatch → Log groups → `/aws/apigateway/cookierun-claim-api` → เลือก Log stream → Log events
+
+**ข้อสังเกตที่ตรวจพบจากการทดสอบ**
+- Log มาถึงช้ากว่าคำขอเล็กน้อย (หลักวินาทีถึงไม่กี่สิบวินาที) หากยิงแล้วยังไม่เห็น ให้รอแล้วดึงซ้ำ
+- **คำขอไปยัง path ที่ไม่มี route ตรงกัน (ตอบ `404`) ไม่ปรากฏใน Access Log** (สังเกตซ้ำในการทดสอบ 3 รอบ) จึงตรวจการเรียกผิด path จาก Log นี้ไม่ได้
+- รูปแบบ Log ไม่เก็บ body และไม่เก็บ header ใดๆ ตั้งใจเว้น `Authorization` ไว้เพื่อไม่ให้ token หลุดลง Log เมื่อเพิ่ม Login ใน V3 ห้ามเพิ่มฟิลด์ที่มีข้อมูลส่วนบุคคลหรือ token ลงในรูปแบบ Log
+
+### 3.4 พฤติกรรมก่อนผูก Lambda (ทดสอบเมื่อ 2026-10-03)
+
+| คำขอ | Status | Body | อยู่ใน Access Log |
+|---|---|---|---|
+| `GET /rates` (มี route, ยังไม่มี Lambda) | `500` | `{"message":"Internal Server Error"}` | พบ |
+| `GET /claims/c001` (มี route, ยังไม่มี Lambda) | `500` | `{"message":"Internal Server Error"}` | พบ (`routeKey` เป็น `GET /claims/{id}`) |
+| `GET /not-a-route` (ไม่มี route) | `404` | `{"message":"Not Found"}` | ไม่พบ |
+
+response ที่ API Gateway สร้างเอง (404 ไม่มี route, 500 เมื่อยังไม่มี Lambda) มีรูปแบบ `{"message": "..."}` ไม่ใช่รูปแบบ `{ success, data, error }` ของ Contract ซึ่งจะเกิดเฉพาะเมื่อ Lambda เป็นผู้ตอบ ฝั่ง Frontend ควรตรวจ status code ก่อน แล้วอ่าน `error.message` หรือ `message` ตามที่มี
+
+### 3.5 สิทธิ์ที่ผู้เปิด Log ต้องมี
+
+`logs:CreateLogDelivery`, `logs:PutResourcePolicy`, `logs:UpdateLogDelivery`, `logs:DeleteLogDelivery`, `logs:CreateLogGroup`, `logs:DescribeResourcePolicies`, `logs:GetLogDelivery`, `logs:ListLogDeliveries` (เพิ่ม `logs:PutRetentionPolicy` สำหรับตั้งอายุ Log)
+
+ร่าง policy ตัวอย่างอยู่ที่ [`backend/api/iam/api-logs-permission.json`](../backend/api/iam/api-logs-permission.json) **ยังไม่ได้ทดสอบกับกลุ่ม `ApiDev`** ผู้ใช้ในกลุ่ม `Admins` รันสคริปต์ได้อยู่แล้ว
+
+### 3.6 สร้างซ้ำ
+
+```bash
+API_ID=39eee8bl4b ./backend/api/scripts/setup-stage.sh
+```
+
+สคริปต์สร้าง Log group, ตั้งอายุ 7 วัน, สร้างหรืออัปเดต Stage `$default` พร้อมเปิด Access Log และพิมพ์ Invoke URL เมื่อรันซ้ำจะอัปเดตค่าเดิมโดยไม่สร้างของซ้ำ
