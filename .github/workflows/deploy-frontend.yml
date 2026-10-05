@@ -1,0 +1,108 @@
+name: Deploy Frontend
+
+on:
+  # ตรวจทุก PR ที่จะเข้า main (ไม่ใส่ paths เพื่อให้ status check รายงานผลทุก PR)
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "data/**"
+      - ".github/workflows/deploy-frontend.yml"
+      - ".github/scripts/validate_frontend.py"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (show what would change, upload nothing)"
+        type: boolean
+        default: false
+
+# ค่าเริ่มต้นทั้ง workflow: อ่านโค้ดได้อย่างเดียว
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  SITE_DIR: _site
+
+jobs:
+  # ---------------- CI ----------------
+  validate:
+    name: Validate JSON & structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate
+        run: python3 .github/scripts/validate_frontend.py
+
+  # ---------------- CD ----------------
+  deploy:
+    name: Deploy to S3 + invalidate CloudFront
+    needs: validate
+    # PR รันแค่ validate ไม่ deploy
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # ตั้งที่ระดับ job: push ติดกันจะเข้าคิวทีละรอบ ไม่ยกเลิกรอบที่กำลัง sync
+    # และ PR ที่รันแค่ validate จะไม่ไปแย่งคิว/ยกเลิกรอบ deploy ที่รออยู่
+    concurrency:
+      group: deploy-frontend
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write   # จำเป็นสำหรับขอ OIDC token ไปแลก credentials กับ AWS
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check repository variables
+        run: |
+          missing=0
+          for v in AWS_ROLE_ARN FRONTEND_BUCKET CLOUDFRONT_DISTRIBUTION_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Repository variable $v is not set"; missing=1; fi
+          done
+          exit $missing
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+
+      # repo เก็บ data/ ไว้ข้าง frontend/ แต่ตอน deploy ต้องให้ data/ อยู่ข้าง index.html
+      - name: Assemble site
+        run: |
+          rm -rf "$SITE_DIR"
+          mkdir -p "$SITE_DIR"
+          cp -R frontend/. "$SITE_DIR/"
+          cp -R data "$SITE_DIR/data"
+          find "$SITE_DIR" -name '.gitkeep' -delete
+          echo "Files to deploy:"
+          (cd "$SITE_DIR" && find . -type f | sort)
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: gha-frontend-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync "$SITE_DIR/" "s3://${{ vars.FRONTEND_BUCKET }}/" \
+            --delete \
+            --no-progress \
+            ${{ inputs.dry_run && '--dryrun' || '' }}
+
+      - name: Invalidate CloudFront cache
+        if: ${{ !inputs.dry_run }}
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*" \
+            --query 'Invalidation.Id' --output text)
+          echo "Invalidation ID: $INVALIDATION_ID"
+          {
+            echo "### Frontend deployed"
+            echo "- Commit: \`${GITHUB_SHA::7}\`"
+            echo "- Bucket: \`${{ vars.FRONTEND_BUCKET }}\`"
+            echo "- CloudFront invalidation: \`$INVALIDATION_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
