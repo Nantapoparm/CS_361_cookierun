@@ -11,7 +11,7 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:Nantapoparm/CS_361_cookierun:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": "repo:Nantapoparm@181006824/CS_361_cookierun@1339206130:ref:refs/heads/main"
         }
       }
     }
