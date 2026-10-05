@@ -5,7 +5,7 @@
 #   API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com ./smoke-test.sh
 #
 # ค่าเริ่มต้น: ทดสอบเฉพาะ CORS (ไม่ต้องมี Lambda) exit 0 เมื่อผ่านทั้งหมด
-# เปิดการทดสอบ route ด้วย RUN_ROUTES=1 (ต้องผูก Lambda แล้ว คือ Issue 4)
+# เปิดการทดสอบ route ด้วย RUN_ROUTES=1
 #   RUN_ROUTES=1 API_URL=... ./smoke-test.sh
 #
 # ตัวแปรที่ปรับได้:
@@ -112,7 +112,6 @@ if [ "$RUN_ROUTES" = "1" ]; then
   check "GET /claims/{id} not found" 404 -H "$UID_H" "$API_URL/claims/not-exist"
   check "PUT /claims/{id} not found" 404 -H "$UID_H" -X PUT "$API_URL/claims/not-exist" -H "$JSON" -d "$BODY"
   check "submit not found"           404 -H "$UID_H" -X POST "$API_URL/claims/not-exist/submit"
-  # TODO (Issue 4): ใช้ id จริงจาก POST /claims เพื่อทดสอบ GET/PUT/submit สำเร็จ และ 409
 else
   echo "(ข้ามการทดสอบ route: ตั้ง RUN_ROUTES=1 เมื่อผูก Lambda แล้ว)"
 fi
