@@ -24,13 +24,15 @@ async function request(method, path, body) {
 
 // API จริง: response สำเร็จ = { success:true, data } ; ผิดพลาด = { success:false, error:{ code, message } }
 async function realRequest(method, path, body) {
+  const headers = { 'X-User-Id': localStorage.getItem('userId') || '' };
+  if (body) headers['Content-Type'] = 'application/json';
+  
   let res;
+  
   try {
     res = await fetch(API_CONFIG.BASE_URL + path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' ,
-        'X-User-Id': localStorage.getItem('userId'),
-      } : undefined,
+      headers,
       body: body ? JSON.stringify(body) : undefined
     });
   } catch {
