@@ -3,6 +3,8 @@
 // ข้อมูลเก็บใน localStorage (key: mockClaimsV4) เพื่อให้ข้ามหน้าได้ — ล้างข้อมูลทดสอบ: localStorage.removeItem('mockClaimsV4')
 // ทุกหน้าเรียกผ่านออบเจกต์ `api` เท่านั้น สลับโหมดที่ API_CONFIG.USE_MOCK (true = mock, false = API จริง) แล้วตั้ง API_CONFIG.BASE_URL
 
+localStorage.setItem('userId', '1')
+
 const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
   USE_MOCK: false,
@@ -26,7 +28,9 @@ async function realRequest(method, path, body) {
   try {
     res = await fetch(API_CONFIG.BASE_URL + path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      headers: body ? { 'Content-Type': 'application/json' ,
+        'X-User-Id': localStorage.getItem('userId'),
+      } : undefined,
       body: body ? JSON.stringify(body) : undefined
     });
   } catch {
@@ -136,45 +140,45 @@ const MOCK = {
   ],
   seed: [
     // ภาค 1/2569 (ปัจจุบัน)
-    { id: 'c001', userId: 'u001', role: 'ta', term: '1-2569', billingCycle: 1,
+    { id: 'c001', userId: 'ๅ', role: 'ta', term: '1-2569', billingCycle: 1,
       items: [{ date: '2026-09-15', courseCode: 'CS361', hours: 3, note: 'สอนปกติ' }],
       attachments: ['uploads/1726100000-cs361-sep.pdf'], status: 'draft',
       createdAt: '2026-09-16T08:00:00Z', updatedAt: '2026-09-16T08:00:00Z', submittedAt: null },
-    { id: 'c002', userId: 'u001', role: 'ta', term: '1-2569', billingCycle: 2,
+    { id: 'c002', userId: '1', role: 'ta', term: '1-2569', billingCycle: 2,
       items: [{ date: '2026-09-03', courseCode: 'CS101', hours: 3, note: '' }, { date: '2026-09-10', courseCode: 'CS101', hours: 2.5, note: 'ชดเชย' }],
       attachments: ['uploads/1726000000-timesheet.pdf'], status: 'submitted',
       createdAt: '2026-09-11T09:00:00Z', updatedAt: '2026-09-12T10:20:00Z', submittedAt: '2026-09-12T10:20:00Z' },
-    { id: 'c004', userId: 'u001', role: 'ta', term: '1-2569', billingCycle: 1,
+    { id: 'c004', userId: '1', role: 'ta', term: '1-2569', billingCycle: 1,
       items: [{ date: '2026-08-18', courseCode: 'CS261', hours: 3, note: 'สอนปกติ' }, { date: '2026-08-25', courseCode: 'CS261', hours: 3, note: 'สอนปกติ' }, { date: '2026-08-29', courseCode: 'CS261', hours: 1.5, note: 'ตรวจงาน' }],
       attachments: ['uploads/1725500000-cs261-aug.pdf'], status: 'submitted',
       createdAt: '2026-09-02T09:00:00Z', updatedAt: '2026-09-03T10:00:00Z', submittedAt: '2026-09-03T10:00:00Z' },
 
     // ภาค 2/2568
-    { id: 'c003', userId: 'u001', role: 'ta', term: '2-2568', billingCycle: 1,
+    { id: 'c003', userId: '1', role: 'ta', term: '2-2568', billingCycle: 1,
       items: [{ date: '2026-03-04', courseCode: 'CS261', hours: 2, note: '' }],
       attachments: [], status: 'submitted',
       createdAt: '2026-03-05T09:00:00Z', updatedAt: '2026-03-06T11:00:00Z', submittedAt: '2026-03-06T11:00:00Z' },
-    { id: 'c005', userId: 'u001', role: 'ta', term: '2-2568', billingCycle: 2,
+    { id: 'c005', userId: '1', role: 'ta', term: '2-2568', billingCycle: 2,
       items: [{ date: '2026-04-07', courseCode: 'CS101', hours: 3, note: 'สอนปกติ' }, { date: '2026-04-21', courseCode: 'CS101', hours: 3, note: 'สอนปกติ' }],
       attachments: ['uploads/1713000000-cs101-apr.pdf'], status: 'submitted',
       createdAt: '2026-05-07T09:00:00Z', updatedAt: '2026-05-08T10:00:00Z', submittedAt: '2026-05-08T10:00:00Z' },
 
     // ภาค 1/2568
-    { id: 'c006', userId: 'u001', role: 'ta', term: '1-2568', billingCycle: 1,
+    { id: 'c006', userId: '1', role: 'ta', term: '1-2568', billingCycle: 1,
       items: [{ date: '2025-09-09', courseCode: 'CS361', hours: 3, note: '' }, { date: '2025-09-23', courseCode: 'CS361', hours: 2, note: 'ชดเชย' }],
       attachments: [], status: 'submitted',
       createdAt: '2025-10-02T09:00:00Z', updatedAt: '2025-10-03T10:00:00Z', submittedAt: '2025-10-03T10:00:00Z' },
-    { id: 'c007', userId: 'u001', role: 'ta', term: '1-2568', billingCycle: 2,
+    { id: 'c007', userId: '1', role: 'ta', term: '1-2568', billingCycle: 2,
       items: [{ date: '2025-10-14', courseCode: 'CS101', hours: 4, note: 'สอนปกติ' }, { date: '2025-10-28', courseCode: 'CS101', hours: 3.5, note: '' }],
       attachments: ['uploads/1730000000-cs101-oct.pdf'], status: 'submitted',
       createdAt: '2025-11-07T09:00:00Z', updatedAt: '2025-11-08T10:00:00Z', submittedAt: '2025-11-08T10:00:00Z' },
 
     // ภาค 2/2567
-    { id: 'c008', userId: 'u001', role: 'ta', term: '2-2567', billingCycle: 1,
+    { id: 'c008', userId: '1', role: 'ta', term: '2-2567', billingCycle: 1,
       items: [{ date: '2025-02-11', courseCode: 'CS261', hours: 3, note: '' }],
       attachments: [], status: 'submitted',
       createdAt: '2025-03-03T09:00:00Z', updatedAt: '2025-03-04T10:00:00Z', submittedAt: '2025-03-04T10:00:00Z' },
-    { id: 'c009', userId: 'u001', role: 'ta', term: '2-2567', billingCycle: 2,
+    { id: 'c009', userId: '1', role: 'ta', term: '2-2567', billingCycle: 2,
       items: [{ date: '2025-03-12', courseCode: 'CS361', hours: 2.5, note: 'สอนปกติ' }, { date: '2025-03-26', courseCode: 'CS361', hours: 2.5, note: '' }],
       attachments: [], status: 'submitted',
       createdAt: '2025-04-07T09:00:00Z', updatedAt: '2025-04-08T10:00:00Z', submittedAt: '2025-04-08T10:00:00Z' }
