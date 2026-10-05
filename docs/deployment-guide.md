@@ -88,6 +88,14 @@ aws iam put-role-policy \
 
 หากสร้างผ่าน Console (Roles → Create role → Web identity) ให้แก้ไข Trust Policy ภายหลังให้ตรงกับไฟล์ใน repository เนื่องจาก Console จะสร้างเงื่อนไขแบบ `StringLike` ซึ่งหลวมกว่าที่กำหนดไว้
 
+**รูปแบบของ `sub`:** GitHub ส่งค่า `sub` ของ repository นี้ในรูปแบบที่มี ID ถาวรของเจ้าของและของ repository ต่อท้ายชื่อ
+
+```
+repo:Nantapoparm@181006824/CS_361_cookierun@1339206130:ref:refs/heads/main
+```
+
+ไม่ใช่รูปแบบ `repo:Nantapoparm/CS_361_cookierun:ref:refs/heads/main` ที่ปรากฏในเอกสารทั่วไป รูปแบบนี้ปลอดภัยกว่า เนื่องจากหาก repository ถูกลบและมีผู้สร้าง repository ชื่อเดิมขึ้นใหม่ ID จะเปลี่ยน จึงไม่สามารถ Assume Role นี้ได้ ID ทั้งสองเป็นข้อมูลสาธารณะ จึงระบุค่าจริงไว้ในไฟล์ได้ หากย้าย repository ต้องตรวจค่า `sub` ใหม่จาก CloudTrail (ดูหัวข้อ Troubleshooting)
+
 ไม่ควร commit ไฟล์ที่แทนค่าจริงแล้วกลับเข้า repository ให้คงค่า placeholder ไว้
 
 ### 3. Set repository variables
@@ -140,7 +148,7 @@ GitHub → Settings → Secrets and variables → Actions → แท็บ **Var
 | Workflow ไม่ทำงานหลัง Push | แก้ไขเฉพาะไฟล์นอก `frontend/` และ `data/` (เช่น README) | เป็นพฤติกรรมปกติ หากต้องการ Deploy ให้สั่ง Run workflow ด้วยตนเอง |
 | `Repository variable ... is not set` | ยังไม่ได้ตั้งค่า Variables หรือตั้งไว้ในแท็บ Secrets | ตั้งค่าในแท็บ Variables ตามขั้นตอนที่ 3 |
 | `Could not load credentials from any providers` | Workflow ไม่มีสิทธิ์ `id-token: write` | ตรวจสอบบล็อก `permissions` ของ job `deploy` |
-| `Not authorized to perform sts:AssumeRoleWithWebIdentity` (รันจาก `main`) | ค่า `sub` ใน Trust Policy ไม่ตรง เช่น พิมพ์ชื่อ repository ผิด หรือมีการเพิ่ม `environment:` ใน job ซึ่งทำให้รูปแบบ `sub` เปลี่ยน | ตรวจ Trust Policy ให้ตรงกับไฟล์ใน `infra/iam/` ทุกตัวอักษร และตรวจว่ามี OIDC provider ในบัญชีแล้ว |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` (รันจาก `main`) | ค่า `sub` ใน Trust Policy ไม่ตรงกับค่าที่ GitHub ส่งมา เช่น ไม่มี ID ถาวรต่อท้ายชื่อ (`@181006824`, `@1339206130`) พิมพ์ชื่อ repository ผิด หรือมีการเพิ่ม `environment:` ใน job ซึ่งทำให้รูปแบบ `sub` เปลี่ยน | ดูค่า `sub` ที่ GitHub ส่งมาจริงจาก CloudTrail → Event history → Event name `AssumeRoleWithWebIdentity` → เปิด Event ที่มี Error code `AccessDenied` → ค่า `userIdentity.userName` แล้วแก้ Trust Policy ให้ตรงทุกตัวอักษร และตรวจว่ามี OIDC provider ในบัญชีแล้ว |
 | `AccessDenied` ที่ `ListObjectsV2` | ชื่อ bucket ใน Variable หรือใน Policy ไม่ตรงกัน | ตรวจ `FRONTEND_BUCKET` และ Resource ของ `ListFrontendBucket` |
 | `AccessDenied` ที่ `PutObject` | bucket ใช้การเข้ารหัสแบบ SSE-KMS ด้วย customer managed key | ใช้ SSE-S3 (ค่าเริ่มต้น) หรือเพิ่มสิทธิ์ `kms:GenerateDataKey` เฉพาะ key นั้น |
 | `AccessDenied` ที่ `CreateInvalidation` | Distribution ID หรือหมายเลขบัญชีใน Policy ไม่ถูกต้อง | ตรวจ Resource ของ `InvalidateFrontendDistribution` |
