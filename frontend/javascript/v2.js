@@ -1,0 +1,16 @@
+const seedClaims = [{ id: 'CLM-2569-0018', term: '1/2569', cycle: 'รอบที่ 1', type: 'อาจารย์ / ผู้สอน', course: 'CS361 Software Architecture', hours: 12.5, status: 'review' }];
+const storageKey = 'teaching-claims-v2';
+const getClaims = () => JSON.parse(localStorage.getItem(storageKey) || JSON.stringify(seedClaims));
+const saveClaims = (claims) => localStorage.setItem(storageKey, JSON.stringify(claims));
+const statusText = { review: 'กำลังตรวจสอบ', draft: 'ร่าง' };
+const claimRow = (claim) => `<div class="claim-row"><div><b>${claim.course}</b><small>${claim.id} · ${claim.term} · ${claim.cycle} · ${claim.hours} ชั่วโมง</small></div><span class="status ${claim.status}">${statusText[claim.status]}</span></div>`;
+function renderLists() { const claims = getClaims(); document.querySelector('#draft-count').textContent = claims.filter((claim) => claim.status === 'draft').length; document.querySelector('#recent-list').innerHTML = claims.length ? claims.slice().reverse().map(claimRow).join('') : '<p class="empty">ยังไม่มีคำขอ</p>'; document.querySelector('#draft-list').innerHTML = claims.filter((claim) => claim.status === 'draft').map(claimRow).join('') || '<p class="empty">ยังไม่มีร่างคำขอ</p>'; renderTracking(); }
+function renderTracking() { const term = document.querySelector('#filter-term').value; const status = document.querySelector('#filter-status').value; const claims = getClaims().filter((claim) => (term === 'all' || claim.term === term) && (status === 'all' || claim.status === status)); document.querySelector('#tracking-list').innerHTML = claims.map(claimRow).join('') || '<p class="empty">ไม่พบคำขอตามตัวกรอง</p>'; }
+function showView(view) { document.querySelectorAll('.view').forEach((section) => section.classList.toggle('active', section.id === `${view}-view`)); document.querySelectorAll('.v2-nav button').forEach((button) => button.classList.toggle('active', button.dataset.view === view)); }
+document.querySelectorAll('.v2-nav button').forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
+document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.go)));
+document.querySelector('#filter-term').addEventListener('change', renderTracking); document.querySelector('#filter-status').addEventListener('change', renderTracking);
+document.querySelector('#evidence').addEventListener('change', (event) => { document.querySelector('#file-hint').textContent = event.target.files[0]?.name || 'ยังไม่มีไฟล์แนบ'; });
+function readForm(status) { const data = Object.fromEntries(new FormData(document.querySelector('#claim-form'))); return { ...data, id: `CLM-2569-${String(Date.now()).slice(-4)}`, hours: Number(data.hours), status }; }
+function persistClaim(status) { const form = document.querySelector('#claim-form'); if (!form.reportValidity()) return; saveClaims([...getClaims(), readForm(status)]); document.querySelector('#save-state').textContent = status === 'draft' ? 'บันทึกร่างแล้ว' : 'ยื่นคำขอแล้ว'; form.reset(); renderLists(); showView(status === 'draft' ? 'drafts' : 'tracking'); }
+document.querySelector('#save-draft').addEventListener('click', () => persistClaim('draft')); document.querySelector('#claim-form').addEventListener('submit', (event) => { event.preventDefault(); persistClaim('review'); }); renderLists();
