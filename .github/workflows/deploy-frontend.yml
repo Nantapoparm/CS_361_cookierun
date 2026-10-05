@@ -1,6 +1,9 @@
 name: Deploy Frontend
 
 on:
+  # ตรวจทุก PR ที่จะเข้า main (ไม่ใส่ paths เพื่อให้ status check รายงานผลทุก PR)
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -14,11 +17,6 @@ on:
         description: "Dry run (show what would change, upload nothing)"
         type: boolean
         default: false
-
-# push ติดกันหลายครั้ง → เข้าคิวทีละรอบ ไม่ยกเลิกรอบที่กำลัง sync อยู่กลางทาง
-concurrency:
-  group: deploy-frontend
-  cancel-in-progress: false
 
 # ค่าเริ่มต้นทั้ง workflow: อ่านโค้ดได้อย่างเดียว
 permissions:
@@ -43,7 +41,14 @@ jobs:
   deploy:
     name: Deploy to S3 + invalidate CloudFront
     needs: validate
+    # PR รันแค่ validate ไม่ deploy
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # ตั้งที่ระดับ job: push ติดกันจะเข้าคิวทีละรอบ ไม่ยกเลิกรอบที่กำลัง sync
+    # และ PR ที่รันแค่ validate จะไม่ไปแย่งคิว/ยกเลิกรอบ deploy ที่รออยู่
+    concurrency:
+      group: deploy-frontend
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write   # จำเป็นสำหรับขอ OIDC token ไปแลก credentials กับ AWS
