@@ -4,7 +4,7 @@
 
 ## Overview
 
-เมื่อมีการ Push เข้า branch `main` และมีการเปลี่ยนแปลงไฟล์ในโฟลเดอร์ `frontend/` หรือ `data/` ระบบจะดำเนินการตามลำดับดังนี้
+เมื่อเปิด Pull Request เข้า `main` ระบบจะรันเฉพาะ Job `validate` เพื่อตรวจไฟล์ก่อน Merge และเมื่อมีการ Push เข้า branch `main` ที่เปลี่ยนแปลงไฟล์ในโฟลเดอร์ `frontend/` หรือ `data/` ระบบจะดำเนินการตามลำดับดังนี้
 
 ```
 push → main
@@ -44,7 +44,12 @@ GitHub Actions ไม่ใช้ AWS Access Key ระยะยาว แต่
 
 ## One-time Setup
 
-ต้องดำเนินการในบัญชี AWS จริงของทีม (Region `us-east-1`) โดยผู้ที่มีสิทธิ์ IAM Admin เนื่องจาก AWS Academy Learner Lab ไม่อนุญาตให้สร้าง IAM Identity Provider หรือ IAM Role ใหม่ และต้องสร้าง S3 bucket และ CloudFront distribution ของ Frontend ให้เรียบร้อยก่อน
+ต้องดำเนินการในบัญชี AWS จริงของทีม (Region `us-east-1`) โดยผู้ที่มีสิทธิ์ IAM Admin เนื่องจาก AWS Academy Learner Lab ไม่อนุญาตให้สร้าง IAM Identity Provider หรือ IAM Role ใหม่
+
+### 0. Prerequisites
+
+- มี S3 bucket และ CloudFront distribution ของ Frontend แล้ว โดย CloudFront เข้าถึง bucket ผ่าน Origin Access Control (OAC)
+- ตั้งค่า **Default root object** ของ distribution เป็น `index.html` (CloudFront → Distribution → General → Settings → Edit) เนื่องจาก OAC ใช้ S3 REST endpoint ซึ่งไม่ส่ง `index.html` ให้อัตโนมัติเมื่อเปิดที่ `/`
 
 ### 1. Create the OIDC identity provider
 
@@ -100,14 +105,19 @@ GitHub → Settings → Secrets and variables → Actions → แท็บ **Var
 
 ### 4. Protect the main branch
 
-เจ้าของ repository ควรเปิด Branch protection ของ `main` (Settings → Branches) โดยกำหนดให้ต้องผ่าน Pull Request และให้ status check `Validate JSON & structure` ผ่านก่อน merge
+เจ้าของ repository ควรเปิด Branch protection ของ `main` (Settings → Branches) โดยกำหนดให้ต้องผ่าน Pull Request และให้ status check `Validate JSON & structure` ผ่านก่อน merge (Check นี้รันกับทุก Pull Request ที่เข้า `main`)
+
+### 5. Before the first merge
+
+การ Merge Pull Request ที่เพิ่ม Workflow นี้จะ Deploy ทันที โดยไม่มีโอกาสใช้ Dry run ก่อน ให้เปิดดู Frontend bucket ใน Console และตรวจว่าไม่มีไฟล์ที่อัปโหลดด้วยมือและยังต้องใช้งาน เนื่องจาก `--delete` จะลบไฟล์ที่ไม่มีใน repository
 
 ## Daily Usage
 
-- แก้ไขไฟล์ใน `frontend/` หรือ `data/` แล้ว merge เข้า `main` ระบบจะ Deploy ให้โดยอัตโนมัติ
+- เปิด Pull Request เข้า `main` ระบบจะรัน `Validate JSON & structure` ให้อัตโนมัติ หากไม่ผ่านให้แก้ไขก่อน Merge
+- เมื่อ merge เข้า `main` และมีการแก้ไขไฟล์ใน `frontend/` หรือ `data/` ระบบจะ Deploy ให้โดยอัตโนมัติ
 - ตรวจสอบไฟล์ในเครื่องก่อน Push ได้ด้วยคำสั่ง `python3 .github/scripts/validate_frontend.py`
 - หากต้องการ Deploy ซ้ำโดยไม่มีการแก้ไขไฟล์ ให้ไปที่ Actions → Deploy Frontend → **Run workflow**
-- หากต้องการดูว่าจะมีไฟล์ใดเปลี่ยนแปลงโดยยังไม่อัปโหลดจริง ให้เลือก **Dry run** ตอนสั่ง Run workflow
+- หากต้องการดูว่าจะมีไฟล์ใดเปลี่ยนแปลงโดยยังไม่อัปโหลดจริง ให้เลือก **Dry run** ตอนสั่ง Run workflow (ผล Dry run จะแสดงทุกไฟล์เป็น `upload` เสมอ เนื่องจากไฟล์ที่ checkout ใหม่มีเวลาแก้ไขใหม่ทุกครั้ง ให้ตรวจเฉพาะบรรทัด `delete`)
 - เมื่อ Deploy สำเร็จ หน้า Summary ของ Workflow run จะแสดง Commit, ชื่อ bucket และ Invalidation ID
 
 ## Verification
@@ -117,7 +127,7 @@ GitHub → Settings → Secrets and variables → Actions → แท็บ **Var
 | เกณฑ์ | วิธีทดสอบ | ผลที่คาดหวัง |
 |---|---|---|
 | Deploy สำเร็จ | แก้ข้อความใน `data/site.json` แล้ว Push เข้า `main` | Workflow ผ่านทั้งสอง job และหน้าเว็บบนโดเมน CloudFront เปลี่ยนภายในไม่กี่นาที |
-| JSON ผิดต้องไม่ Deploy | ลบเครื่องหมาย `}` ตัวสุดท้ายออกจากไฟล์ JSON ใดไฟล์หนึ่งแล้ว Push | job `validate` ล้มเหลวพร้อมแจ้งชื่อไฟล์และบรรทัด job `deploy` ถูกข้าม |
+| JSON ผิดต้องไม่ Deploy | เปิด Pull Request ที่ลบเครื่องหมาย `}` ตัวสุดท้ายออกจากไฟล์ JSON ใดไฟล์หนึ่ง | check `Validate JSON & structure` ล้มเหลวบน Pull Request พร้อมแจ้งชื่อไฟล์และบรรทัด และไม่มีการ Deploy |
 | ลบไฟล์แล้วหายจาก S3 | ลบไฟล์ทดสอบที่เพิ่มไว้ออกจาก `frontend/` แล้ว Push | Log ของขั้น Sync แสดง `delete: s3://...` และไม่พบไฟล์นั้นใน bucket |
 | ไม่มี Access Key | ตรวจ Settings → Secrets และค้นหาคำว่า `AKIA` ใน repository | ไม่พบ |
 | branch อื่น Assume Role ไม่ได้ | สร้าง branch `test-oidc` แล้วสั่ง Run workflow จาก branch นั้น | ขั้น Configure AWS credentials ล้มเหลวด้วยข้อความ `Not authorized to perform sts:AssumeRoleWithWebIdentity` |
@@ -134,5 +144,6 @@ GitHub → Settings → Secrets and variables → Actions → แท็บ **Var
 | `AccessDenied` ที่ `ListObjectsV2` | ชื่อ bucket ใน Variable หรือใน Policy ไม่ตรงกัน | ตรวจ `FRONTEND_BUCKET` และ Resource ของ `ListFrontendBucket` |
 | `AccessDenied` ที่ `PutObject` | bucket ใช้การเข้ารหัสแบบ SSE-KMS ด้วย customer managed key | ใช้ SSE-S3 (ค่าเริ่มต้น) หรือเพิ่มสิทธิ์ `kms:GenerateDataKey` เฉพาะ key นั้น |
 | `AccessDenied` ที่ `CreateInvalidation` | Distribution ID หรือหมายเลขบัญชีใน Policy ไม่ถูกต้อง | ตรวจ Resource ของ `InvalidateFrontendDistribution` |
-| Deploy สำเร็จแต่หน้าเว็บยังเป็นเวอร์ชันเดิม | Invalidation ยังไม่เสร็จ (โดยทั่วไปใช้เวลา 1–5 นาที) หรือเบราว์เซอร์เก็บ cache | รอสักครู่แล้วกด Hard refresh (Ctrl+Shift+R) |
+| Deploy สำเร็จแต่หน้าเว็บยังเป็นเวอร์ชันเดิม | Invalidation ยังไม่เสร็จ (โดยทั่วไปใช้เวลา 1–5 นาที) หรือเบราว์เซอร์เก็บ cache เนื่องจากยังไม่ได้กำหนด `Cache-Control` | รอสักครู่แล้วกด Hard refresh (Ctrl+Shift+R) หากเกิดบ่อยให้เพิ่ม `--cache-control` ในขั้น Sync |
+| เปิดที่ `/` แล้วได้ 403 (AccessDenied) | ยังไม่ได้ตั้ง Default root object | ตั้งเป็น `index.html` ตามข้อ 0 |
 | หน้าเว็บโหลดได้แต่ข้อมูลไม่ขึ้น (403/404 ที่ไฟล์ JSON) | โฟลเดอร์ `data/` ไม่ถูกอัปโหลด หรือ Bucket policy สำหรับ OAC ไม่ถูกต้อง | ตรวจรายชื่อไฟล์ใน Log ขั้น Assemble site และตรวจ Bucket policy ของ CloudFront OAC |
