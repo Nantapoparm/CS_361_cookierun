@@ -163,3 +163,16 @@ API_ID=39eee8bl4b ./backend/api/scripts/setup-stage.sh
 ```
 
 สคริปต์สร้าง Log group, ตั้งอายุ 7 วัน, สร้างหรืออัปเดต Stage `$default` พร้อมเปิด Access Log และพิมพ์ Invoke URL เมื่อรันซ้ำจะอัปเดตค่าเดิมโดยไม่สร้างของซ้ำ
+
+## 4. ทดสอบ CORS และ API (Smoke Test)
+
+สคริปต์ `backend/api/tests/smoke-test.sh` ทดสอบ CORS preflight ของ API Gateway
+
+```bash
+API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
+```
+
+- ค่าเริ่มต้นทดสอบเฉพาะ CORS (ไม่ต้องมี Lambda) และ exit 0 เมื่อผ่านทั้งหมด
+- เพิ่ม `RUN_ROUTES=1` เพื่อทดสอบทุก route (ต้องผูก Lambda แล้ว)
+- ปรับ origin ที่ทดสอบได้ด้วย `ORIGIN`, `LOCAL_ORIGIN`, `BAD_ORIGIN`
+- Origin ที่อนุญาต: `https://d2ye2fegyyx6ls.cloudfront.net` และ localhost 3000/5500/8000
