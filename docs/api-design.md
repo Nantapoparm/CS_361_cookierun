@@ -176,3 +176,21 @@ API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/
 - เพิ่ม `RUN_ROUTES=1` เพื่อทดสอบทุก route (ต้องผูก Lambda แล้ว)
 - ปรับ origin ที่ทดสอบได้ด้วย `ORIGIN`, `LOCAL_ORIGIN`, `BAD_ORIGIN`
 - Origin ที่อนุญาต: `https://d2ye2fegyyx6ls.cloudfront.net` และ localhost 3000/5500/8000
+
+## 5. ผูก Lambda กับ API Gateway
+
+สคริปต์ `backend/api/scripts/bind-lambdas.sh` ผูก Lambda `cookierun-*` เข้ากับ route ของ API
+
+```bash
+API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh
+```
+
+สคริปต์ทำสิ่งต่อไปนี้
+1. Reimport `backend/api/openapi.yaml` โดยแทน `ACCOUNT_ID` ด้วย Account ID จริง
+2. อ่านรายการ route → Lambda จาก API จริง แล้วให้สิทธิ์ `lambda:InvokeFunction` แยกตาม route (ข้ามถ้ามีอยู่แล้ว)
+3. ตรวจ Stage `$default`, Access Log และ CORS
+
+ข้อควรรู้
+- ต้องรันจากโฟลเดอร์ repo บน `main` ล่าสุด เพราะ reimport เขียนทับ CORS ทั้งก้อนด้วยค่าในไฟล์ (สคริปต์หยุดถ้าไม่พบ origin CloudFront)
+- ตั้ง `SKIP_IMPORT=1` เพื่อข้าม reimport และตรวจ/ให้สิทธิ์อย่างเดียว
+- รันซ้ำได้โดยไม่เกิดข้อผิดพลาด
