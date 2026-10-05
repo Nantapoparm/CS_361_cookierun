@@ -22,6 +22,7 @@ x-amazon-apigateway-cors:
   allowHeaders:
     - Content-Type
     - Authorization   # Login: ส่ง token ผ่าน header Authorization
+    - X-User-Id
   maxAge: 3600
 
 # ---------------------------------------------------------------
