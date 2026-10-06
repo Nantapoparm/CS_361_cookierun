@@ -144,6 +144,6 @@ body > .main { flex: 1; }
   .pager-bar { flex-direction: column; align-items: flex-start; }
 }
 
-#btnSubmit{
+.hideBtnSubmit{
   display: none;
 }
