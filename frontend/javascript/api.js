@@ -8,8 +8,8 @@
 // เพิ่มผู้ใช้ทดสอบ = เพิ่มแถวใน DB แล้วเพิ่มรายการที่นี่
 const TEST_USERS = [
   { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'instructor' },
-  { userId: '2', name: 'Nantapop2', lastName: 'Chonchobthum02', role: 'ta' },
-  { userId: '3', name: 'Nantapop3', lastName: 'Chonchobthum02', role: 'student_helper' }
+  { userId: '2', name: 'สมหมาย', lastName: 'ใจกว้าง', role: 'ta' },
+  { userId: '3', name: 'สมหญิง', lastName: 'ใจแคบ', role: 'student_helper' }
 ];
 const USER_KEY = 'userId';
 const savedUserId = () => { try { return localStorage.getItem(USER_KEY); } catch { return null; } };
