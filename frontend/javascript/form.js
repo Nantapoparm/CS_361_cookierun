@@ -14,7 +14,8 @@ const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
 let claimId = new URLSearchParams(location.search).get('id');
 let terms = [], rates = [], items = [], attachments = []; // attachments = [{ name, key }]
-let role = ''; //let role = API_CONFIG.USER.role; // บทบาทที่เลือก (เริ่มต้นตามผู้ใช้ปัจจุบัน)
+// บทบาทล็อกตามผู้ใช้ — backend คิดเงินจาก role ใน user_information ไม่ได้ใช้ค่าที่ส่งไป
+let role = API_CONFIG.USER.role;
 let term = '', cycle = null; // ภาค (เช่น '1-2569') และรอบ (1|2) ที่ผู้ใช้เลือก
 const MAX_H = 24, MAX_M = 59; // นาทีต้อง 0–59 (60 นาที = 1 ชม.) ; DB: hours ต่อรายการไม่เกิน 24
 const blank = () => ({ date: '', h: '', m: '', note: '' });
@@ -30,21 +31,15 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const myRate = () => rates.find((r) => r.role === role) || null;
 const rateFor = () => myRate()?.ratePerHour || 0;
 
-/* ---------- เลือกบทบาทจาก dropdown (ตัวเลือกจาก api.getRates) ---------- */
+/* ---------- บทบาท: แสดงอย่างเดียว เลือกไม่ได้ ---------- */
 
 function renderRole() {
-  
-  const roles = rates.map((r) => r.role);
-  if (role && !roles.includes(role)) roles.push(role); // บทบาทเดิมของร่างไม่อยู่ในรายการ → ยังเลือกได้
-  $('roleSel').innerHTML = '<option value="">เลือกบทบาท</option>' +
-    roles.map((r) => `<option value="${esc(r)}">${esc(ROLE_TH[r] || r)}</option>`).join('');
-  $('roleSel').value = role;
-}
-
-function onRoleChange() {
-  role = $('roleSel').value;
-  renderRole();
-  refresh(); // อัตราเปลี่ยนตามบทบาท
+  $('roleSel').innerHTML = `<option value="${esc(role)}">${esc(ROLE_TH[role] || role || '-')}</option>`;
+  $('roleSel').disabled = true;
+  const r = myRate();
+  $('roleHint').textContent = r
+    ? `ตามข้อมูลผู้ใช้ในระบบ · ${baht(r.ratePerHour)}/ชม.`
+    : 'ตามข้อมูลผู้ใช้ในระบบ';
 }
 
 /* ---------- เลือกภาค + รอบจาก dropdown (ข้อมูลจาก api.getTerms) ---------- */
@@ -241,7 +236,6 @@ async function initForm() {
   renderTermCycle();
   renderItems();
 
-  $('roleSel').addEventListener('change', onRoleChange);
   $('termSel').addEventListener('change', onTermChange);
   $('cycleSel').addEventListener('change', onCycleChange);
 

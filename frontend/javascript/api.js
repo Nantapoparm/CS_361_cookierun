@@ -10,7 +10,8 @@ const API_CONFIG = {
   USE_MOCK: false,
   BASE_URL: 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com', // ใส่ URL ของ API Gateway จริง (ไม่ต้องมี / ท้าย)
   // ชั่วคราว: ยังไม่มี login → ผู้ใช้คนเดียว (role: instructor | ta | student_helper)
-  USER: { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'ta', halfLoad: true }
+  // role ต้องตรงกับ user_information.roleId ของ userId นี้ใน DB (backend คิดเงินตามค่าใน DB)
+  USER: { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'instructor', halfLoad: true }
 };
 
 class ApiError extends Error {
