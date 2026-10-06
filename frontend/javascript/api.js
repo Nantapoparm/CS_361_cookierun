@@ -52,6 +52,24 @@ const qs = (o) => {
   return p.toString() ? '?' + p : '';
 };
 
+// DB เก็บปีเป็น ค.ศ. (backend อาจส่ง '1-2026') → FE ใช้ พ.ศ. เสมอ: '1-2026' → '1-2569'
+const toBuddhistTerm = (t) => {
+  const m = /^([1-3])-(\d{4})$/.exec(String(t || '').trim());
+  if (!m) return t;
+  const y = Number(m[2]);
+  return `${m[1]}-${y < 2400 ? y + 543 : y}`;
+};
+const normClaim = (c) => (c ? { ...c, term: toBuddhistTerm(c.term) } : c);
+// แปลงเป็น พ.ศ. แล้วตัดภาคที่ซ้ำ (เช่น 1-2569 กับ 1-2026 คือภาคเดียวกัน)
+const normTerms = (list) => {
+  const seen = new Map();
+  (list || []).forEach((t) => {
+    const id = toBuddhistTerm(t.id);
+    if (!seen.has(id)) seen.set(id, { ...t, id, name: `ภาคการศึกษาที่ ${termLabel(id)}` });
+  });
+  return [...seen.values()];
+};
+
 /* ---------- 8 routes ตาม openapi.yaml ----------
    claim = { id, userId, role, term:'1-2569', billingCycle:1|2,
              items:[{date, courseCode?, hours, note?}], attachments:[fileKey],
@@ -59,12 +77,17 @@ const qs = (o) => {
    body ของ POST/PUT = { userId, role, term, billingCycle, items:[{date, courseCode?, hours, note?}], attachments?:[fileKey] }
    1 คำขอ = 1 วิชา: FE ใส่ courseCode เดียวกันในทุก item */
 const api = {
-  getClaims:       (f)        => request('GET',  '/claims' + qs({ userId: API_CONFIG.USER.userId, ...f })), // f = {term:'1-2569', status:'draft'|'submitted'}
-  createClaim:     (body)     => request('POST', '/claims', body),
-  getClaim:        (id)       => request('GET',  `/claims/${encodeURIComponent(id)}`),
-  updateClaim:     (id, body) => request('PUT',  `/claims/${encodeURIComponent(id)}`, body),
-  submitClaim:     (id)       => request('POST', `/claims/${encodeURIComponent(id)}/submit`),
-  getTerms:        ()         => request('GET',  '/terms'),  // → [{ id:'1-2569', name, billingCycles:[{cycle, description, startDay?, lastDay}] }]
+  // f = {term:'1-2569', status:'draft'|'submitted'} — กรองภาคที่ FE หลังแปลงเป็น พ.ศ. (backend อาจเก็บเป็น ค.ศ.)
+  getClaims: async (f = {}) => {
+    const { term, ...rest } = f;
+    const list = (await request('GET', '/claims' + qs({ userId: API_CONFIG.USER.userId, ...rest }))).map(normClaim);
+    return term ? list.filter((c) => c.term === term) : list;
+  },
+  createClaim:     async (body)     => normClaim(await request('POST', '/claims', body)),
+  getClaim:        async (id)       => normClaim(await request('GET',  `/claims/${encodeURIComponent(id)}`)),
+  updateClaim:     async (id, body) => normClaim(await request('PUT',  `/claims/${encodeURIComponent(id)}`, body)),
+  submitClaim:     async (id)       => normClaim(await request('POST', `/claims/${encodeURIComponent(id)}/submit`)),
+  getTerms:        async ()         => normTerms(await request('GET', '/terms')),  // → [{ id:'1-2569', name, billingCycles:[{cycle, description, startDay?, lastDay}] }]
   getRates:        ()         => request('GET',  '/rates'),  // → [{ role, ratePerHour, maxHours, maxHoursHalfLoad|null }]
   getPresignedUrl: (p)        => request('GET',  '/uploads/presigned-url' + qs(p)) // → {uploadUrl, fileKey}
 };
