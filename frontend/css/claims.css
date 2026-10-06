@@ -143,7 +143,3 @@ body > .main { flex: 1; }
 @media (max-width: 640px) {
   .pager-bar { flex-direction: column; align-items: flex-start; }
 }
-
-.hideBtnSubmit{
-  display: none;
-}
