@@ -105,7 +105,7 @@ function render() {
   }
 
   $('rows').innerHTML = slice.map(row).join('');
-  $('foot').innerHTML = sumRow(list); // รวมทุกหน้าตามตัวกรอง ไม่ใช่เฉพาะหน้านี้
+  $('foot').innerHTML = ''; // sumRow(list) รวมทุกหน้าตามตัวกรอง ไม่ใช่เฉพาะหน้านี้
   $('pageInfo').textContent = `แสดง ${start + 1}–${start + slice.length} จาก ${list.length} รายการ`;
   $('pager').innerHTML = pagerHtml(page, pages);
 }
