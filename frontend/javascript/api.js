@@ -3,15 +3,23 @@
 // ข้อมูลเก็บใน localStorage (key: mockClaimsV4) เพื่อให้ข้ามหน้าได้ — ล้างข้อมูลทดสอบ: localStorage.removeItem('mockClaimsV4')
 // ทุกหน้าเรียกผ่านออบเจกต์ `api` เท่านั้น สลับโหมดที่ API_CONFIG.USE_MOCK (true = mock, false = API จริง) แล้วตั้ง API_CONFIG.BASE_URL
 
-localStorage.setItem('userId', '1')
+// ชั่วคราว: ยังไม่มี login → สลับผู้ใช้ทดสอบได้จาก dropdown บนแถบด้านบน (renderUserSwitch)
+// role ต้องตรงกับ user_information.roleId ของ userId นั้นใน DB (backend คิดเงินตามค่าใน DB)
+// เพิ่มผู้ใช้ทดสอบ = เพิ่มแถวใน DB แล้วเพิ่มรายการที่นี่
+const TEST_USERS = [
+  { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'instructor' },
+  { userId: '2', name: 'Nantapop2', lastName: 'Chonchobthum02', role: 'ta' },
+  { userId: '3', name: 'Nantapop3', lastName: 'Chonchobthum02', role: 'student_helper' }
+];
+const USER_KEY = 'userId';
+const savedUserId = () => { try { return localStorage.getItem(USER_KEY); } catch { return null; } };
 
 const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
   USE_MOCK: false,
   BASE_URL: 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com', // ใส่ URL ของ API Gateway จริง (ไม่ต้องมี / ท้าย)
-  // ชั่วคราว: ยังไม่มี login → ผู้ใช้คนเดียว (role: instructor | ta | student_helper)
-  // role ต้องตรงกับ user_information.roleId ของ userId นี้ใน DB (backend คิดเงินตามค่าใน DB)
-  USER: { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'instructor', halfLoad: true }
+  // ผู้ใช้ปัจจุบัน = คนที่เลือกไว้ (จำใน localStorage) ไม่งั้นคนแรกในรายการ
+  USER: { ...(TEST_USERS.find((u) => u.userId === savedUserId()) || TEST_USERS[0]), halfLoad: true }
 };
 
 class ApiError extends Error {
@@ -25,7 +33,7 @@ async function request(method, path, body) {
 
 // API จริง: response สำเร็จ = { success:true, data } ; ผิดพลาด = { success:false, error:{ code, message } }
 async function realRequest(method, path, body) {
-  const headers = { 'X-User-Id': localStorage.getItem('userId') || '' };
+  const headers = { 'X-User-Id': API_CONFIG.USER.userId };
   if (body) headers['Content-Type'] = 'application/json';
   
   let res;
@@ -146,6 +154,24 @@ async function initPage() {
     renderTopbar(site);
     renderFooter(site);
   } catch (e) { console.warn('โหลด site.json ไม่ได้', e); }
+  renderUserSwitch();
+}
+
+// dropdown สลับผู้ใช้ทดสอบบนแถบด้านบน — เปลี่ยนแล้วโหลดหน้าใหม่
+// (ถ้าเปิดคำขอของคนเดิมอยู่ จะกลับไปหน้ารายการ เพราะคนใหม่ไม่มีสิทธิ์ดู)
+function renderUserSwitch() {
+  const bar = document.querySelector('[data-mount="topbar"]');
+  if (!bar || $('userSwitch')) return;
+  const opts = TEST_USERS.map((u) =>
+    `<option value="${esc(u.userId)}">${esc(u.name)} ${esc(u.lastName)} · ${esc(ROLE_TH[u.role] || u.role)}</option>`).join('');
+  bar.insertAdjacentHTML('beforeend',
+    `<label class="user-switch"><span>ใช้งานเป็น</span><select id="userSwitch" aria-label="ใช้งานเป็นผู้ใช้">${opts}</select></label>`);
+  $('userSwitch').value = API_CONFIG.USER.userId;
+  $('userSwitch').addEventListener('change', (e) => {
+    try { localStorage.setItem(USER_KEY, e.target.value); } catch { /* ไม่มี storage → ใช้ได้แค่หน้านี้ */ }
+    if (new URLSearchParams(location.search).get('id')) location.href = 'dashboard.html';
+    else location.reload();
+  });
 }
 
 /* ---------- Mock (เก็บใน localStorage เพื่อให้ข้ามหน้าได้) ---------- */

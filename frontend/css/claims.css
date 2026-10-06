@@ -143,3 +143,18 @@ body > .main { flex: 1; }
 @media (max-width: 640px) {
   .pager-bar { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---------- สลับผู้ใช้ทดสอบบนแถบด้านบน (ชั่วคราว จนกว่าจะมีระบบ login) ---------- */
+.user-switch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255, 255, 255, .62); white-space: nowrap; }
+.user-switch select {
+  font-family: inherit; font-size: 12px; color: #fff; max-width: 240px;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 8px; padding: 5px 8px; cursor: pointer;
+}
+.user-switch select:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
+.user-switch option { color: #111; background: #fff; }
+
+@media (max-width: 900px) {
+  .user-switch span { display: none; }
+  .user-switch select { max-width: 150px; }
+}
