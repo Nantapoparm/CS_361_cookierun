@@ -154,7 +154,11 @@ body > .main { flex: 1; }
 .user-switch select:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
 .user-switch option { color: #111; background: #fff; }
 
+/* จอแคบ: logo + เมนู + dropdown ไม่พอในแถวเดียว → ให้ dropdown ลงไปอยู่แถวใหม่เต็มความกว้าง */
 @media (max-width: 900px) {
-  .user-switch span { display: none; }
-  .user-switch select { max-width: 150px; }
+  .topbar:has(.user-switch) { flex-wrap: wrap; height: auto; min-height: var(--topbar-h); row-gap: 0; padding-top: 8px; padding-bottom: 10px; }
+  .topbar:has(.user-switch) .org { display: none; }
+  .topbar:has(.user-switch) .topnav { min-height: var(--topbar-h); }
+  .user-switch { order: 3; flex: 1 0 100%; }
+  .user-switch select { flex: 1; max-width: none; min-width: 0; }
 }
