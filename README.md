@@ -40,7 +40,7 @@
 | V6 – ประสิทธิภาพและต้นทุน | วัดผลและปรับปรุงประสิทธิภาพ พร้อมหลักฐานเปรียบเทียบก่อนและหลังการปรับปรุง |
 | V7 – ระบบแบบบูรณาการ | บูรณาการทุกส่วนของระบบและทบทวนสถาปัตยกรรมโดยรวม |
 
-## V1 — Information (Due: 31 Aug 2026, 23:59)
+## V1 — Information (Due: 31 Aug 2026)
 
 ### Goal
 เพื่อให้อาจารย์ ผู้ช่วยสอน และนักศึกษาช่วยงานสามารถเข้าถึงข้อมูลพื้นฐานเกี่ยวกับค่าตอบแทนการสอนได้ โดยยังไม่จำเป็นต้องเข้าสู่ระบบหรือยื่นคำขอผ่านระบบ
@@ -50,7 +50,7 @@
 - แสดงเงื่อนไขและขั้นตอนโดยสังเขป (เช่น การสอนชดเชย การสอนออนไลน์ที่ต้องขออนุมัติจากคณบดี)
 - แสดงรายการเอกสารที่จำเป็นต้องใช้ (ในรูปแบบสรุป มิใช่แบบฟอร์มจริง)
 
-### Out of scope (V2+)
+### Out of scope ของ V1
 - ระบบเข้าสู่ระบบและการกำหนดสิทธิ์ผู้ใช้งาน (เริ่มดำเนินการใน V3)
 - การสร้าง ยื่น และติดตามสถานะคำขอเบิกจริง
 - แบบฟอร์มหรือใบลงลายมือชื่อจริง
@@ -58,7 +58,7 @@
 - การติดตามวันที่เงินเข้าบัญชี (ฝ่ายการเงินใช้ระบบ ERP แยกต่างหาก)
 - การรับ-จ่ายเงินและการส่งเอกสารจริง
 
-### Architecture
+### Architecture (V1)
 
 **แนวทางที่เลือกใช้: Amazon S3 Static Website Hosting**
 
@@ -71,33 +71,182 @@ Amazon S3 (Static Website Hosting)
   └─ compensation.json   (ข้อมูลอัตรา เงื่อนไข และเอกสารที่ต้องใช้)
 ```
 
-ระบบให้บริการเว็บไซต์ทั้งหมดผ่าน S3 bucket เพียงบัคเก็ตเดียว โดยเปิดใช้งาน Static Website Hosting ข้อมูลอัตราและเงื่อนไขจัดเก็บในรูปแบบไฟล์ JSON ภายในบัคเก็ตเดียวกัน และให้ไฟล์ app.js เรียกข้อมูลมาแสดงผลด้วยคำสั่ง fetch() เหตุผลที่เลือกแนวทางนี้เนื่องจาก V1 ยังไม่จำเป็นต้องมีระบบเข้าสู่ระบบ แบบฟอร์ม หรือข้อมูลแบบพลวัต จึงไม่จำเป็นต้องมีส่วนประมวลผลฝั่งเซิร์ฟเวอร์ (Backend) ไม่มีค่าใช้จ่ายเพิ่มเติม และสามารถนำไปใช้งานได้อย่างรวดเร็ว ส่วนการเชื่อมต่อกับ DynamoDB โดยตรง หรือการแยกเป็นสองบัคเก็ต (ซึ่งต้องกำหนดค่า CORS เพิ่มเติม) จะดำเนินการในเวอร์ชัน V2 เนื่องจากเกินความจำเป็นของ V1 และมีประเด็นด้านความปลอดภัยที่ควรผ่านชั้น API ที่เหมาะสมกว่า
+ระบบให้บริการเว็บไซต์ทั้งหมดผ่าน S3 bucket เพียงบัคเก็ตเดียว โดยเปิดใช้งาน Static Website Hosting ข้อมูลอัตราและเงื่อนไขจัดเก็บในรูปแบบไฟล์ JSON ภายในบัคเก็ตเดียวกัน และให้ไฟล์ app.js เรียกข้อมูลมาแสดงผลด้วยคำสั่ง fetch() เหตุผลที่เลือกแนวทางนี้เนื่องจาก V1 ยังไม่จำเป็นต้องมีระบบเข้าสู่ระบบ แบบฟอร์ม หรือข้อมูลแบบพลวัต จึงไม่จำเป็นต้องมีส่วนประมวลผลฝั่งเซิร์ฟเวอร์ (Backend) ไม่มีค่าใช้จ่ายเพิ่มเติม และสามารถนำไปใช้งานได้อย่างรวดเร็ว ส่วนการเชื่อมต่อกับฐานข้อมูล หรือการแยกเป็นสองบัคเก็ต (ซึ่งต้องกำหนดค่า CORS เพิ่มเติม) จะดำเนินการในเวอร์ชัน V2 เนื่องจากเกินความจำเป็นของ V1 และมีประเด็นด้านความปลอดภัยที่ควรผ่านชั้น API ที่เหมาะสมกว่า
 
 **ข้อควรระวังในการนำเสนอข้อมูล:** ควรเรียบเรียงข้อมูลอัตราและเงื่อนไขด้วยถ้อยคำของทีมงานเอง มิใช่การคัดลอกเอกสารระเบียบฉบับเต็ม เนื่องจากเอกสารต้นฉบับมิได้เผยแพร่สู่สาธารณะ
 
+## V2 — Dynamic Data (Due: 6 Oct 2026)
+
+### Goal
+ให้ผู้มีสิทธิ์เบิกทั้ง 3 บทบาท คือ อาจารย์ ผู้ช่วยสอน (TA) และนักศึกษาช่วยงาน สร้าง บันทึกร่าง ยื่น และติดตามคำขอเบิกค่าตอบแทนผ่านระบบได้ โดยข้อมูลอัตราและภาคการศึกษาดึงจากแหล่งข้อมูลกลางผ่าน API แทนไฟล์ JSON คงที่ และรองรับหลายรอบการเบิกและหลายภาคการศึกษา
+
+### In scope
+- เลือกบทบาทผู้เบิกได้ 3 บทบาท (อาจารย์ ผู้ช่วยสอน นักศึกษาช่วยงาน)
+- สร้างคำขอเบิก บันทึกเป็นร่าง แก้ไข และยื่นคำขอ (สถานะ `draft` และ `submitted`)
+- ดูรายการคำขอของตนเอง และกรองตามภาคการศึกษาและสถานะ
+- ดึงข้อมูลอัตราค่าตอบแทนและภาคการศึกษาจาก API
+- Route สำหรับขอ presigned URL (`GET /uploads/presigned-url`) มีใน API แล้ว แต่ฟีเจอร์อัปโหลดยังใช้งานจริงไม่ได้
+- Deploy หน้าเว็บอัตโนมัติผ่าน GitHub Actions และให้บริการผ่าน CloudFront
+
+### Out of scope (V3+)
+- ระบบเข้าสู่ระบบ การกำหนดสิทธิ์ตามบทบาท และกระบวนการตรวจสอบ/อนุมัติ (V3)
+- การอัปโหลดและแนบเอกสารหลักฐานจากหน้าเว็บ
+- รายงานและข้อมูลสรุปสำหรับผู้บริหาร
+- Infrastructure as Code เต็มรูปแบบ (V5)
+- การรับ-จ่ายเงินและการเชื่อมต่อกับระบบ ERP ของฝ่ายการเงิน
+
+### Architecture (V2)
+
+```
+ผู้ใช้งาน (เบราว์เซอร์)
+   │
+   ├─► Amazon CloudFront ──► Amazon S3 (Private)      หน้าเว็บ HTML/CSS/JS
+   │
+   └─► Amazon API Gateway (HTTP API, Stage $default)   CORS + Access Log
+          │
+          ▼
+       AWS Lambda (8 ฟังก์ชัน) ──► Amazon CloudWatch Logs
+          │
+          ├─► Amazon RDS                               คำขอเบิก อัตรา ภาคการศึกษา
+          └─► Amazon S3                                เอกสารหลักฐาน (มี route แล้ว ยังไม่เปิดใช้งาน)
+```
+
+ทุกบริการอยู่ใน Region `us-east-1`
+
+| ส่วน | บริการ | เหตุผลที่เลือก |
+|---|---|---|
+| หน้าเว็บ | S3 (Private) + CloudFront | ไม่เปิด bucket สู่สาธารณะ ได้ HTTPS และ cache |
+| API | API Gateway แบบ HTTP API | ราคาถูกกว่า REST API และเพียงพอสำหรับ route ของ V2 |
+| Logic | Lambda (หนึ่งฟังก์ชันต่อหนึ่ง route) | จ่ายตามการใช้งานจริง ปริมาณการใช้ระดับสาขาวิชามีน้อยและมาเป็นช่วง |
+| ข้อมูล | Amazon RDS | ข้อมูลคำขอ รายการชั่วโมง อัตรา และภาคการศึกษามีความสัมพันธ์กัน จึงเหมาะกับฐานข้อมูลเชิงสัมพันธ์ และใช้ SQL กรองหรือสรุปข้อมูลได้ |
+| Log | CloudWatch Logs | เก็บ log ของ Lambda และ Access Log ของ API Gateway |
+
+### API
+
+Base URL: `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com`
+สัญญา API ฉบับเต็มอยู่ที่ [`backend/api/openapi.yaml`](backend/api/openapi.yaml) ซึ่งเป็นแหล่งความจริงของ route และ CORS
+
+| Method | Path | Lambda | หน้าที่ |
+|---|---|---|---|
+| GET | `/rates` | `cookierun-getRates` | อัตราค่าตอบแทน |
+| GET | `/terms` | `cookierun-getTerms` | ภาคการศึกษา |
+| GET | `/claims` | `cookierun-getClaims` | รายการคำขอ (กรองได้) |
+| POST | `/claims` | `cookierun-createClaim` | สร้างคำขอ |
+| GET | `/claims/{id}` | `cookierun-getClaimById` | รายละเอียดคำขอ |
+| PUT | `/claims/{id}` | `cookierun-updateClaim` | แก้ไขคำขอ |
+| POST | `/claims/{id}/submit` | `cookierun-submitClaim` | ยื่นคำขอ |
+| GET | `/uploads/presigned-url` | `cookierun-getPresignedUrl` | ขอ URL สำหรับอัปโหลดเอกสาร (ยังไม่เปิดใช้งานจริง) |
+
+- request ไปยัง `/claims` ทุก route ต้องส่ง header `X-User-Id`
+- CORS อนุญาต origin ของ CloudFront (`https://d2ye2fegyyx6ls.cloudfront.net`) และ `localhost` สำหรับพัฒนา
+- รายละเอียดการออกแบบ Stage, Access Log, CORS และการผูก Lambda อยู่ที่ [`docs/api-design.md`](docs/api-design.md)
+
+### การทดสอบ
+
+```bash
+# ทดสอบ CORS (15 รายการ)
+API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
+
+# ทดสอบ CORS และทุก route (24 รายการ)
+RUN_ROUTES=1 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
+```
+
+สคริปต์คืน exit code 0 เมื่อผ่านทุกรายการ การทดสอบ `POST /claims` จะสร้างข้อมูลจริงในระบบ
+
+### ข้อจำกัดที่ทราบใน V2
+- ยังไม่มีการยืนยันตัวตน `X-User-Id` เป็นค่าที่ฝั่งเบราว์เซอร์ส่งมาเองและปลอมแปลงได้ จึงยังไม่ควรใช้กับข้อมูลจริง จะแทนที่ด้วยระบบเข้าสู่ระบบใน V3
+- ฟีเจอร์อัปโหลดเอกสารหลักฐานยังใช้งานจริงไม่ได้ มีเฉพาะ route `GET /uploads/presigned-url`
+- Smoke test ยังไม่ครอบคลุม `GET /uploads/presigned-url` และกรณีสำเร็จของ `GET/PUT /claims/{id}` กับ `submit`
+- การตั้งค่า API Gateway ยังทำผ่านสคริปต์ CLI (`backend/api/scripts/`) ไม่ใช่ Infrastructure as Code
+- การ import `openapi.yaml` ซ้ำจะเขียนทับค่า CORS ทั้งหมด ต้องรันสคริปต์จาก `main` ล่าสุดเท่านั้น
+
 ## External actors / systems
-อาจารย์ / ผู้ช่วยสอน (TA) / นักศึกษาช่วยงาน / เจ้าหน้าที่ / ฝ่ายการเงิน (ใช้ระบบ ERP แยกต่างหาก ไม่มีการเชื่อมต่อกับระบบนี้)
+อาจารย์ / ผู้ช่วยสอน (TA) / นักศึกษาช่วยงาน / เจ้าหน้าที่
 
 ---
 
 ## Deployment
 
-ตั้งแต่ V2 เป็นต้นไป Frontend ถูก Deploy อัตโนมัติผ่าน GitHub Actions เมื่อมีการ Merge เข้า `main` โดยอัปโหลดขึ้น S3 (Private) และให้บริการผ่าน CloudFront ดูขั้นตอนตั้งค่าและการใช้งานได้ที่ [`docs/deployment-guide.md`](docs/deployment-guide.md)
+**Frontend:** ตั้งแต่ V2 เป็นต้นไป Frontend ถูก Deploy อัตโนมัติผ่าน GitHub Actions เมื่อมีการ Merge เข้า `main` โดยอัปโหลดขึ้น S3 (Private) และให้บริการผ่าน CloudFront ดูขั้นตอนตั้งค่าและการใช้งานได้ที่ [`docs/deployment-guide.md`](docs/deployment-guide.md)
 
 ไม่ต้องอัปโหลดไฟล์ขึ้น S3 ด้วยมือ เนื่องจากการ Deploy อัตโนมัติจะลบไฟล์ที่ไม่มีใน Repository
+
+**API Gateway:** ตั้งค่าด้วยสคริปต์ใน `backend/api/scripts/` โดยรันจาก AWS CloudShell บน `main` ล่าสุด
+
+```bash
+API_ID=39eee8bl4b bash backend/api/scripts/setup-stage.sh     # Stage และ Access Log
+API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh    # import openapi.yaml และให้สิทธิ์เรียก Lambda
+```
+
+สคริปต์ทั้งสองรันซ้ำได้ ดูรายละเอียดที่ [`docs/api-design.md`](docs/api-design.md)
 
 ## Repo Structure
 
 ```
 /
-├── frontend/
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
-├── backend/          # เผื่อสำหรับ V2 ขึ้นไป (Lambda / API handlers) — ยังไม่ใช้งานใน V1
+├── .github/
+│   ├── scripts/
+│   │   └── validate_frontend.py          # ตรวจ JSON และไฟล์ frontend ก่อน deploy
+│   └── workflows/
+│       └── deploy-frontend.yml           # GitHub Actions: deploy frontend ขึ้น S3 + CloudFront
+├── backend/
+│   ├── README.md
+│   ├── handler.js                        # Lambda prototype (ไม่ได้ใช้ใน production)
+│   ├── api/
+│   │   ├── openapi.yaml                  # สัญญา API และค่า CORS (แหล่งความจริง)
+│   │   ├── scripts/
+│   │   │   ├── setup-stage.sh            # ตั้งค่า Stage และ Access Log
+│   │   │   └── bind-lambdas.sh           # import openapi.yaml และให้สิทธิ์เรียก Lambda
+│   │   └── tests/
+│   │       └── smoke-test.sh             # ทดสอบ CORS และ route
+│   └── data/
+│       └── database_script/
+│           └── sql_script.sql            # สร้างฐานข้อมูล MySQL บน RDS และข้อมูลตั้งต้น
 ├── data/
-│   └── compensation.json
-├── docs/              # เอกสารอ้างอิงเพิ่มเติม
+│   ├── site.json                         # รายการหัวข้อของหน้าข้อมูล
+│   └── sections/
+│       ├── cycles.json
+│       ├── documents.json
+│       ├── manuals.json
+│       ├── overview.json
+│       ├── rates.json
+│       ├── timeline.json
+│       └── users.json
+├── docs/
+│   ├── .gitkeep
+│   ├── api-design.md
+│   └── deployment-guide.md
+├── frontend/
+│   ├── index.html                        # หน้าข้อมูลการเบิก
+│   ├── dashboard.html                    # รายการคำขอของฉัน
+│   ├── form.html                         # สร้าง / แก้ไขคำขอ
+│   ├── detail.html                       # รายละเอียดคำขอ
+│   ├── assets/
+│   │   ├── logo.png
+│   │   └── docs/
+│   │       ├── manual-instructor.pdf
+│   │       ├── manual-student.pdf
+│   │       └── manual-ta.pdf
+│   ├── css/
+│   │   ├── base.css
+│   │   ├── claims.css
+│   │   ├── components.css
+│   │   ├── layout.css
+│   │   └── v2.css                        # ต้นแบบเก่า ไม่มีหน้าไหนโหลดแล้ว
+│   └── javascript/
+│       ├── api.js
+│       ├── app.js
+│       ├── core.js
+│       ├── dashboard.js
+│       ├── detail.js
+│       ├── form.js
+│       ├── layout.js
+│       ├── sections.js
+│       └── v2.js                         # ต้นแบบเก่า ไม่มีหน้าไหนโหลดแล้ว
+├── infra/
+│   └── iam/
+│       ├── github-actions-frontend-deploy-policy.json
+│       └── github-actions-trust-policy.json
 └── README.md
 ```
 
