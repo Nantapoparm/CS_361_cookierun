@@ -216,6 +216,21 @@
     };
   }
 
+  function getUser() {
+    const token = storage.getItem(STORAGE_KEYS.idToken);
+      if (!token) return null;
+      try {
+        const c = decodePayload(token);
+        return {
+          name: c.given_name ?? null,
+          lastName: c.family_name ?? null,
+          role: roleFromGroups(getGroupsFromIdToken())
+        };
+      } catch (e) {
+        return null;
+    }
+  }
+
   // ------------------------------
   // Login
   // ------------------------------
@@ -368,5 +383,5 @@
     }
   }
 
-  window.Auth = { login, getToken, getUserRole, isLoggedIn, logout };
+  window.Auth = { login, getToken, getUserRole, isLoggedIn, logout, getUser};
 })();
