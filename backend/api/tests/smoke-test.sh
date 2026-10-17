@@ -8,6 +8,10 @@
 # เปิดการทดสอบ route ด้วย RUN_ROUTES=1
 #   RUN_ROUTES=1 API_URL=... ./smoke-test.sh
 #
+# ทดสอบ JWT Authorizer (V3): ตั้ง TOKEN เป็น ID Token หรือ Access Token จาก Cognito
+#   TOKEN=$(bash backend/api/scripts/get-token.sh) API_URL=... ./smoke-test.sh
+# ไม่ตั้ง TOKEN = ทดสอบเฉพาะกรณีไม่มี token / token ปลอม (ต้องได้ 401)
+#
 # ตัวแปรที่ปรับได้:
 #   ORIGIN         origin ที่ควรได้รับอนุญาต (ค่าเริ่มต้น: CloudFront ของทีม)
 #   LOCAL_ORIGIN   origin localhost ที่ควรได้รับอนุญาต
@@ -22,6 +26,7 @@ LOCAL_ORIGIN="${LOCAL_ORIGIN:-http://localhost:3000}"
 BAD_ORIGIN="${BAD_ORIGIN:-http://evil.example.com}"
 X_USER_ID="${X_USER_ID:-test-ta-01}"
 RUN_ROUTES="${RUN_ROUTES:-0}"
+TOKEN="${TOKEN:-}"
 
 PASS=0; FAIL=0
 pass() { echo "PASS  $1"; PASS=$((PASS+1)); }
@@ -65,7 +70,8 @@ MAXAGE=$(header_of access-control-max-age)
   || fail "max-age ควรเป็น 3600 (ได้ '$MAXAGE')"
 
 # 2) preflight ของ route ที่ใช้ method ต่างกัน
-for spec in "/claims:POST" "/claims/c001:PUT" "/claims/c001/submit:POST" "/terms:GET"; do
+for spec in "/claims:POST" "/claims/c001:PUT" "/claims/c001/submit:POST" "/terms:GET" \
+            "/schedule/1:DELETE" "/current-period:GET" "/admin/claims:GET"; do
   p="${spec%%:*}"; m="${spec##*:}"
   preflight "$p" "$ORIGIN" "$m" "content-type,x-user-id"
   if [ "$(status_of)" = "204" ] && [ "$(header_of access-control-allow-origin)" = "$ORIGIN" ]; then
@@ -89,6 +95,35 @@ else
   fail "origin ที่ไม่อนุญาตไม่ควรมี allow-origin (ได้ '$(header_of access-control-allow-origin)')"
 fi
 
+# ---------- JWT Authorizer (V3) ----------
+echo "=== JWT Authorizer ==="
+# code_of <curl args...> -> HTTP status
+code_of() { curl -s --max-time 20 -o /dev/null -w "%{http_code}" "$@"; }
+
+for path in /rates /claims /current-period /admin/claims; do
+  c=$(code_of "$API_URL$path")
+  [ "$c" = "401" ] && pass "ไม่มี token: GET $path ได้ 401" || fail "ไม่มี token: GET $path ควรได้ 401 (ได้ $c)"
+done
+
+c=$(code_of -H "Authorization: Bearer not.a.real.token" "$API_URL/rates")
+[ "$c" = "401" ] && pass "token ปลอม ได้ 401" || fail "token ปลอม ควรได้ 401 (ได้ $c)"
+
+# หน้าเว็บต้องอ่าน 401 ได้ (ไม่ใช่ CORS error) จึงต้องมี allow-origin แม้ถูกปฏิเสธ
+AO=$(curl -si --max-time 20 -H "Origin: $ORIGIN" "$API_URL/rates" | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d: -f2- | sed 's/^ *//')
+[ "$AO" = "$ORIGIN" ] && pass "response 401 มี allow-origin ($ORIGIN)" || fail "response 401 ควรมี allow-origin $ORIGIN (ได้ '$AO')"
+
+if [ -n "$TOKEN" ]; then
+  AUTH_H="Authorization: Bearer $TOKEN"
+  for path in /rates /terms; do
+    c=$(code_of -H "$AUTH_H" "$API_URL$path")
+    [ "$c" = "200" ] && pass "มี token: GET $path ได้ 200 (Lambda ตอบ)" || fail "มี token: GET $path ควรได้ 200 (ได้ $c)"
+  done
+  AO=$(curl -si --max-time 20 -H "Origin: $ORIGIN" -H "$AUTH_H" "$API_URL/rates" | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d: -f2- | sed 's/^ *//')
+  [ "$AO" = "$ORIGIN" ] && pass "มี token: response มี allow-origin" || fail "มี token: response ควรมี allow-origin $ORIGIN (ได้ '$AO')"
+else
+  echo "(ข้ามกรณีมี token: ตั้ง TOKEN เพื่อทดสอบ)"
+fi
+
 # ---------- ทดสอบ route (ต้องผูก Lambda แล้ว) ----------
 if [ "$RUN_ROUTES" = "1" ]; then
   echo "=== Route tests (RUN_ROUTES=1) ==="
@@ -96,9 +131,10 @@ if [ "$RUN_ROUTES" = "1" ]; then
   BODY='{"userId":"u001","role":"instructor","term":"1-2569","billingCycle":1,"items":[{"date":"2026-09-15","courseCode":"CS361","hours":3}]}'
 
   # check <ชื่อ> <status ที่คาดหวัง> <curl args...>
+  [ -n "$TOKEN" ] || { echo "RUN_ROUTES=1 ต้องตั้ง TOKEN ด้วย (ทุก route ต้องเข้าสู่ระบบ)"; exit 1; }
   check() {
     local name="$1" expected="$2" code; shift 2
-    code=$(curl -s --max-time 20 -o /dev/null -w "%{http_code}" "$@")
+    code=$(curl -s --max-time 20 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$@")
     if [ "$code" = "$expected" ]; then pass "$name (got $code)"; else fail "$name (expected $expected, got $code)"; fi
   }
 
