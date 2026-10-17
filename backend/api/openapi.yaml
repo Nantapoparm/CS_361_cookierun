@@ -803,12 +803,12 @@ paths:
       operationId: getClaimPdf
       security: [ { cognitoJwt: [] } ]
       summary: สร้าง PDF ของคำขอและคืน Presigned URL อายุสั้น
-      description: นักศึกษาช่วยงานได้แบบฟอร์มเปล่า ฉบับพิมพ์จริงดาวน์โหลดได้หลังเจ้าหน้าที่ตรวจผ่านเท่านั้น
+      description: ฉบับพิมพ์จริงดาวน์โหลดได้หลังเจ้าหน้าที่ตรวจผ่านเท่านั้น คำขอของนักศึกษาช่วยงานได้แบบฟอร์มเปล่าเสมอ (type=claim ก็คืน blank)
       parameters:
         - name: type
           in: query
-          description: claim = แบบฟอร์มเบิก, makeup = แบบฟอร์มขอสอนชดเชย
-          schema: { type: string, enum: [claim, makeup], default: claim }
+          description: claim = แบบฟอร์มเบิก (อาจารย์/TA), makeup = แบบฟอร์มขอสอนชดเชย, blank = แบบฟอร์มเปล่าของนักศึกษาช่วยงาน
+          schema: { type: string, enum: [claim, makeup, blank], default: claim }
       responses:
         '200':
           description: สำเร็จ
@@ -841,6 +841,7 @@ paths:
         - { name: status, in: query, schema: { $ref: '#/components/schemas/ClaimStatus' } }
         - { name: month, in: query, description: รอบการเบิก YYYY-MM, schema: { type: string } }
         - { name: offeringId, in: query, schema: { type: string } }
+        - { name: printMethod, in: query, description: ช่องทางยื่น (จาก claims.printStatus), schema: { type: string, enum: [sign_with_staff, self_print] } }
         - { name: q, in: query, description: ค้นหาด้วยชื่อหรือเลขที่คำขอ, schema: { type: string } }
       responses:
         '200':

@@ -41,8 +41,8 @@
 | POST | `/claims/autofill` | สร้างร่างคำขอจากปฏิทิน (1 วิชา/เดือน) | `cookierun-autofillClaim` | 200 (ไม่มีคาบ), 201, 400, 403, 409 |
 | PUT | `/claims/{id}/print-method` | เปลี่ยนช่องทางยื่น | `cookierun-claimWorkflow` | 200, 400, 404, 409 |
 | GET | `/claims/{id}/actions` | ประวัติการดำเนินการของคำขอ | `cookierun-claimWorkflow` | 200, 404 |
-| GET | `/claims/{id}/pdf?type=claim\|makeup` | สร้าง PDF คืน Presigned URL | `cookierun-generatePdf` | 200, 403, 404, 409 |
-| GET | `/admin/claims?role=&status=&month=&offeringId=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ | `cookierun-admin` | 200, 403 |
+| GET | `/claims/{id}/pdf?type=claim\|makeup\|blank` | สร้าง PDF (คำขอ / ขอสอนชดเชย / แบบฟอร์มเปล่า) คืน Presigned URL | `cookierun-generatePdf` | 200, 403, 404, 409 |
+| GET | `/admin/claims?role=&status=&month=&offeringId=&printMethod=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ | `cookierun-admin` | 200, 403 |
 | GET | `/admin/claims/{id}` | รายละเอียดสำหรับตรวจ | `cookierun-admin` | 200, 403, 404 |
 | POST | `/admin/claims/{id}/review` | approve / reject / return | `cookierun-admin` | 200, 400, 403, 404, 409 |
 | POST | `/admin/claims/{id}/printed` | บันทึกว่าเจ้าหน้าที่พิมพ์แล้ว | `cookierun-admin` | 200, 403, 404, 409 |
