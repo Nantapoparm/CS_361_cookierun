@@ -10,9 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/claims.css">
   <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/user.css">
 </head>
 <body class="app">
   <header class="topbar" data-mount="topbar"></header>
@@ -24,10 +23,10 @@
         <h1>คำขอของฉัน</h1>
         <p class="lead" id="lead"></p>
       </div>
-      <div class="tools"><a class="btn" href="form.html">สร้างคำขอใหม่</a></div>
+      <div class="tools"><a class="btn" href="form.html" id="btnNew">สร้างคำขอใหม่</a></div>
     </div>
 
-    <div class="filters">
+    <div class="filters" id="filters">
       <select id="fTerm" aria-label="ภาคการศึกษา"><option value="">ทุกภาคการศึกษา</option></select>
       <select id="fCycle" aria-label="รอบการเบิก">
         <option value="">ทุกรอบการเบิก</option>
@@ -36,12 +35,15 @@
       </select>
       <select id="fCourse" aria-label="วิชา"><option value="">ทุกวิชา</option></select>
       <select id="fStatus" aria-label="สถานะ"><option value="">ทุกสถานะ</option></select>
+      <input type="search" id="fSearch" placeholder="ค้นหาเลขที่คำขอ…" aria-label="ค้นหาเลขที่คำขอ">
+      <button type="button" class="link-btn" id="fClear" hidden>ล้างตัวกรอง</button>
     </div>
+    <div class="counts" id="counts" role="group" aria-label="กรองตามสถานะ"></div>
 
     <div id="msg"></div>
-    <div class="table-card">
-      <table class="dtable claims-table">
-        <thead><tr><th>เลขที่</th><th>วิชา</th><th>ภาคการศึกษา</th><th>รอบการเบิก</th><th class="num">ชม.</th><th class="num">ยอดเบิก (บาท)</th><th>สถานะ</th><th></th></tr></thead>
+    <div class="table-card" id="tableCard">
+      <table class="dtable claims-list">
+        <thead><tr><th>เลขที่</th><th>วิชา</th><th>งานเดือน</th><th>รอบการเบิก</th><th class="num">ชม.</th><th class="num">ยอดเบิก (บาท)</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
         <tfoot id="foot"></tfoot>
       </table>
@@ -50,13 +52,6 @@
     <div class="pager-bar">
       <span class="pager-info" id="pageInfo"></span>
       <nav class="pager" id="pager" aria-label="เลือกหน้า"></nav>
-      <label class="pager-size">แสดงต่อหน้า
-        <select id="pageSize" aria-label="จำนวนรายการต่อหน้า">
-          <option value="5" selected>5</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-        </select>
-      </label>
     </div>
   </div></main>
   <footer class="site-footer" data-mount="footer"></footer>

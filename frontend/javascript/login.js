@@ -10,27 +10,10 @@ function nextPage(role) {
 }
 
 /* ---------- การ์ดรอบการเบิกปัจจุบัน ----------
-   คำนวณจากวันที่วันนี้ตามหลักเกณฑ์ (data/sections/cycles.json): รอบ 1 ส่งภายในวันที่ 5, รอบ 2 วันที่ 6–10 ของเดือนถัดไป
-   หน้านี้ยังไม่ได้เข้าสู่ระบบ จึงเรียก GET /current-period (ต้องมี token) ไม่ได้ */
-const TH_MONTH = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-
-function periodNow(today = new Date()) {
-  const d = today.getDate();
-  // หลังวันที่ 10 → รอบที่ 1 ของเดือนหน้า (งานของเดือนนี้)
-  const due = d > 10 ? new Date(today.getFullYear(), today.getMonth() + 1, 1) : today;
-  const work = new Date(due.getFullYear(), due.getMonth() - 1, 1);
-  const be = (dt) => dt.getFullYear() + 543;
-  const cycle = d > 5 && d <= 10 ? 2 : 1;
-  return {
-    title: cycle === 1 ? `รอบที่ 1 · ภายใน 5 ${TH_MON[due.getMonth()]} ${be(due)}` : `รอบที่ 2 · 6–10 ${TH_MON[due.getMonth()]} ${be(due)}`,
-    sub: `สำหรับงานสอนเดือน${TH_MONTH[work.getMonth()]} ${be(work)}`
-  };
-}
-
+   คำนวณจากวันที่วันนี้ (periodFromDate ใน ui.js) เพราะหน้านี้ยังไม่ได้เข้าสู่ระบบ จึงเรียก GET /current-period (ต้องมี token) ไม่ได้ */
 function renderPeriod() {
-  const p = periodNow();
-  $('period').innerHTML = `<div class="eyebrow">รอบการเบิกปัจจุบัน</div><div class="t">${esc(p.title)}</div><div class="d">${esc(p.sub)}</div>`;
+  const p = periodFromDate();
+  $('period').innerHTML = `<div class="eyebrow">รอบการเบิกปัจจุบัน</div><div class="t">${esc(periodTitle(p))}</div><div class="d">สำหรับงานสอนเดือน${esc(thMonthLong(p.claimMonth))}</div>`;
 }
 
 /* ---------- ข้อความผิดพลาด ---------- */
