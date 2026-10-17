@@ -5,29 +5,21 @@
 
 const claimId = new URLSearchParams(location.search).get('id');
 
-function stepsHtml(status) {
-  const steps = [
-    ['ฉบับร่าง', status === 'draft' ? 'now' : 'done'],
-    ['ยื่นแล้ว · รอตรวจสอบ', status === 'submitted' ? 'now' : '']
-  ];
-  return `<div class="steps" aria-label="สถานะคำขอ">${steps.map(([t, c]) => `<span class="${c}">${esc(t)}</span>`).join('')}</div>`;
-}
-
 function renderDetail(c) {
   const rows = [...c.items]
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map((x) => `<tr>
-      <td>${fmtDate(x.date)}</td>
-      <td>${esc(x.note || '-')}</td>
-      <td>${esc(x.hours)}</td>
-    </tr>`).join('') || '<tr><td colspan="3" class="empty">ยังไม่มีรายการงาน</td></tr>';
+      <td data-label="วันที่">${fmtDate(x.date)}</td>
+      <td data-label="หมายเหตุ">${esc(x.note || '-')}</td>
+      <td data-label="ชั่วโมง" class="num">${esc(x.hours)}</td>
+    </tr>`).join('') || '<tr class="empty-row"><td colspan="3">ยังไม่มีรายการงาน</td></tr>';
 
   $('detail').innerHTML = `
-    ${stepsHtml(c.status)}
+    <div class="card stepper-card">${stepperHtml(c.status, c.printMethod)}</div>
     <div class="form-card">
       <dl class="detail-list">
         <dt>เลขที่คำขอ</dt><dd>#${esc(c.id)}</dd>
-        <dt>สถานะ</dt><dd>${statusBadge(c.status)}</dd>
+        <dt>สถานะ</dt><dd>${statusBadge(c.status, c.printMethod)}</dd>
         <dt>วิชา</dt><dd>${esc(courseOf(c) || '-')}</dd>
         <dt>ภาคการศึกษา</dt><dd>${esc(termLabel(c.term))}</dd>
         <dt>รอบการเบิก</dt><dd>${esc(cycleLabel(c.billingCycle))}</dd>
@@ -40,8 +32,8 @@ function renderDetail(c) {
     </div>
     <h3 class="sub">รายการงาน</h3>
     <div class="table-card">
-      <table class="rate-table claims-table">
-        <thead><tr><th>วันที่</th><th>หมายเหตุ</th><th>ชั่วโมง</th></tr></thead>
+      <table class="dtable claims-table">
+        <thead><tr><th>วันที่</th><th>หมายเหตุ</th><th class="num">ชั่วโมง</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -55,7 +47,7 @@ function renderDetail(c) {
 
 async function loadDetail() {
   $('msg').innerHTML = '';
-  $('detail').innerHTML = '<p class="boot">กำลังโหลด…</p>';
+  $('detail').innerHTML = `<div class="card">${skeleton(['w40', '', 'w80', 'lg'])}</div><p class="loading-text">กำลังโหลดข้อมูล…</p>`;
   try {
     if (!claimId) throw new ApiError('NOT_FOUND', 'ไม่พบคำขอ', 404);
     renderDetail(await api.getClaim(claimId));

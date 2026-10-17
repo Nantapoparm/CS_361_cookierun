@@ -1,0 +1,335 @@
+/* ui.css — Component ส่วนกลางของ V3 ตาม Figma "01 · Components"
+   ใช้ตัวแปรจาก base.css · โหลดหลัง claims.css (ทับปุ่ม/ชิปสถานะของ V2 ให้หน้าตาตาม V3)
+   ลำดับ: โครงหน้าแอป → หัวหน้า → ปุ่ม → ชิป → input → กล่องข้อความ → การ์ด → stepper → ปฏิทิน
+          → ตาราง/การ์ดบนมือถือ → แท็บนับ → empty/error/skeleton → modal → toast */
+
+/* ---------- โครงหน้าแอป (body.app = หน้าที่ต้องเข้าสู่ระบบ) ---------- */
+
+body.app { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+body.app > .main { flex: 1; padding: 28px 48px 64px; }
+body.app .content { max-width: var(--app-max); }
+
+/* ---------- หัวหน้า: eyebrow + หัวข้อ + คำอธิบาย + ปุ่มด้านขวา ---------- */
+
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; margin-bottom: 22px; }
+.page-head .eyebrow { font-size: var(--fs-eyebrow); font-weight: 600; color: var(--ink-faint); }
+.page-head h1, .page-head h2 { margin-top: 4px; font-size: var(--fs-page); font-weight: 700; color: var(--ink); }
+.page-head .lead { margin-top: 4px; font-size: 14px; color: var(--ink-muted); }
+.page-head .tools { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* ---------- ปุ่ม ---------- */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 42px; padding: 10px 22px;
+  font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1.3; text-align: center;
+  color: var(--ink-900); background: var(--gold);
+  border: 1px solid var(--gold); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+}
+.btn:hover { background: var(--gold-strong); border-color: var(--gold-strong); }
+.btn.ghost { background: var(--card); border-color: #d0d5dd; color: var(--ink); }
+.btn.ghost:hover { border-color: var(--ink-900); }
+.btn.dark { background: var(--ink-900); border-color: var(--ink-900); color: #fff; }
+.btn.dark:hover { background: var(--ink-800); }
+.btn.danger { background: var(--card); border-color: var(--danger-line); color: var(--danger); }
+.btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+.btn.sm { min-height: 34px; padding: 6px 14px; font-size: 13px; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--gold); border-color: var(--gold); }
+.btn.ghost:disabled:hover { background: var(--card); border-color: #d0d5dd; }
+.btn:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
+
+.link { color: var(--blue); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- ชิปสถานะ (ชุดเดียวทั้งระบบ) ---------- */
+
+.chip, .status {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 3px 11px 3px 9px; border: 0; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  background: var(--st-draft-bg); color: var(--st-draft);
+}
+.chip::before, .status::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip.draft, .status.draft { background: var(--st-draft-bg); color: var(--st-draft); }
+.chip.review, .status.pending { background: var(--st-sub-bg); color: var(--st-sub); }
+.chip.ret, .status.returned { background: var(--st-ret-bg); color: var(--st-ret); }
+.chip.sign { background: var(--st-sign-bg); color: var(--st-sign); }
+.chip.self, .status.approved { background: var(--st-self-bg); color: var(--st-self); }
+.chip.recv { background: var(--st-recv-bg); color: var(--st-recv); }
+.chip.done { background: var(--st-done-bg); color: var(--st-done); }
+.chip.rej, .status.rejected { background: var(--st-rej-bg); color: var(--st-rej); }
+
+/* ป้ายบทบาท / ป้ายเล็กไม่มีจุด */
+.tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: var(--line-soft); color: var(--ink-muted); white-space: nowrap; }
+.tag.auto { background: var(--gold); color: var(--ink-900); font-size: 10px; letter-spacing: .04em; padding: 1px 8px; }
+
+/* ---------- Input: ปกติ / Autofill / ระบบกำหนด / Error ---------- */
+
+.field { display: grid; gap: 6px; align-content: start; font-size: 13.5px; min-width: 0; }
+.field > label { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.field :is(input, select, textarea), .input {
+  width: 100%; min-width: 0; min-height: 42px;
+  font-family: inherit; font-size: 14px; color: var(--ink);
+  background: var(--card); border: 1px solid #d0d5dd; border-radius: var(--radius-sm); padding: 9px 12px;
+}
+.field :is(input, textarea)::placeholder { color: var(--ink-faint); }
+.field :is(input, select, textarea):focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 1px; border-color: var(--gold-strong); }
+.field.auto :is(input, select, textarea) { background: var(--gold-soft); border-color: var(--gold); }
+.field.sys :is(input, select, textarea), .field .static { background: var(--line-soft); border-color: var(--line-soft); font-weight: 600; }
+.field.error :is(input, select, textarea) { border-color: var(--danger); }
+.field .hint { font-size: 12px; color: var(--ink-faint); }
+.field.error .hint { color: var(--danger); }
+
+/* ---------- กล่องข้อความ (หมายเหตุ / ส่งกลับ / สำเร็จ / ขั้นตอนถัดไป) ---------- */
+
+.alert {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 18px; border: 1px solid var(--gold-line); border-radius: 10px;
+  background: var(--gold-soft); color: var(--ink-muted); font-size: 14px;
+}
+.alert b { color: var(--ink); }
+.alert .dot {
+  flex: none; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 1px;
+  border-radius: 50%; background: var(--gold); color: var(--ink-900); font-size: 12px; font-weight: 700;
+}
+.alert .body { flex: 1; min-width: 0; }
+.alert .act { flex: none; margin-left: auto; }
+.alert.danger { background: var(--danger-soft); border-color: var(--danger-line); }
+.alert.danger b { color: var(--st-ret); }
+.alert.danger .dot { background: var(--st-ret); color: #fff; }
+.alert.success { background: var(--ok-soft); border-color: var(--ok-line); }
+.alert.success b { color: var(--st-done); }
+.alert.success .dot { background: var(--ok); color: #fff; }
+.alert.info { background: var(--blue-soft); border-color: var(--blue-line); }
+.alert.info b { color: var(--st-sub); }
+.alert.info .dot { background: var(--blue); color: #fff; }
+
+/* ---------- การ์ด ---------- */
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px 24px; min-width: 0; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.card-head h3 { font-size: var(--fs-card); font-weight: 700; }
+.card.flush { padding: 0; overflow: hidden; }
+.card.flush > .card-head { padding: 18px 20px 0; margin-bottom: 14px; }
+.grid { display: grid; gap: 18px; }
+.grid.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* การ์ดรอบการเบิกปัจจุบัน (พื้นกรมท่า) */
+.period {
+  background: var(--ink-900); color: #fff; border-radius: var(--radius); padding: 24px 24px 26px; min-width: 0;
+}
+.period .eyebrow { font-size: 12px; color: rgba(255, 255, 255, .7); }
+.period .t { margin-top: 6px; font-size: 22px; font-weight: 700; line-height: 1.35; }
+.period .d { margin-top: 6px; font-size: 13.5px; color: rgba(255, 255, 255, .72); }
+.period .left {
+  display: inline-flex; align-items: baseline; gap: 8px; margin-top: 18px;
+  padding: 8px 14px; border: 1px solid rgba(234, 179, 8, .45); border-radius: 8px;
+  background: rgba(234, 179, 8, .14); color: var(--gold); font-size: 15px; font-weight: 700;
+}
+.period .left b { font-size: 22px; }
+.period .foot { margin-top: 14px; font-size: 13px; color: rgba(255, 255, 255, .72); }
+
+/* การ์ดชั่วโมงเทียบเพดาน */
+.hours .ctx { font-size: 12.5px; color: var(--ink-muted); }
+.hours .big { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+.hours .big b { font-size: 34px; font-weight: 700; line-height: 1.2; }
+.hours .big span { color: var(--ink-muted); font-size: 14px; }
+.hours .remain { margin-left: auto; align-self: center; }
+.hours .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.hours .split div { padding: 10px 14px; border-radius: 8px; background: var(--line-soft); font-size: 12px; color: var(--ink-muted); }
+.hours .split div:last-child { background: var(--gold-soft); color: var(--st-sign); }
+.hours .split b { display: block; font-size: 18px; color: var(--ink); }
+.hours .split div:last-child b { color: var(--st-sign); }
+.tag.ok { background: var(--st-done-bg); color: var(--st-done); }
+.tag.warn { background: var(--st-ret-bg); color: var(--st-ret); }
+
+/* การ์ดตัวเลข (Dashboard) */
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 22px; min-width: 0; }
+.stat b { display: block; font-size: 28px; font-weight: 700; line-height: 1.25; color: var(--ink); }
+.stat span { display: block; margin-top: 4px; font-size: 13.5px; color: var(--ink-muted); }
+
+/* การ์ดเลือก (ช่องทางยื่น) */
+.choice {
+  display: flex; align-items: flex-start; gap: 14px; width: 100%; text-align: left;
+  padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+  font-family: inherit; color: var(--ink); cursor: pointer; transition: border-color .15s, background .15s;
+}
+.choice:hover { border-color: var(--ink-faint); }
+.choice[aria-pressed="true"], .choice.on { border-color: var(--ink-900); background: var(--gold-soft); box-shadow: 0 0 0 1px var(--ink-900); }
+.choice .ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--gold); color: var(--ink-900); }
+.choice b { display: block; font-size: 15px; }
+.choice small { display: block; font-size: 12.5px; color: var(--ink-muted); }
+
+/* ---------- Stepper สถานะ (5 ขั้น) ---------- */
+
+.stepper { display: flex; list-style: none; margin: 0; padding: 0; }
+.stepper li { position: relative; flex: 1; display: grid; justify-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-faint); text-align: center; }
+.stepper li::before {
+  content: ""; position: relative; z-index: 1; display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--card);
+}
+.stepper li + li::after { content: ""; position: absolute; top: 10px; right: 50%; width: 100%; height: 2px; background: var(--line); }
+.stepper li.done { color: var(--ink-muted); }
+.stepper li.done::before {
+  border-color: var(--ink-900); background: var(--ink-900);
+  content: "✓"; color: #fff; font-size: 11px; font-weight: 700; line-height: 1;
+}
+.stepper li.done::after, .stepper li.now::after { background: var(--ink-900); }
+.stepper li.now { color: var(--ink); font-weight: 700; }
+.stepper li.now::before { border-color: var(--ink-900); background: var(--gold); }
+.stepper li.stop::before { border-color: var(--danger); background: var(--danger); }
+.stepper li.stop { color: var(--danger); font-weight: 700; }
+
+/* ---------- ขั้นตอน 3 ขั้น (Flow สร้างคำขอ) ---------- */
+
+.steps3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; list-style: none; margin: 0 0 22px; padding: 0; }
+.steps3 li {
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+  padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+  font-size: 14px; font-weight: 600; color: var(--ink-faint);
+}
+.steps3 li .n { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--line-soft); color: var(--ink-muted); font-size: 12px; font-weight: 700; }
+.steps3 li.done { color: var(--st-done); }
+.steps3 li.done .n { background: var(--ok); color: #fff; }
+.steps3 li.now { color: var(--ink); border-color: var(--ink-900); box-shadow: 0 0 0 1px var(--ink-900); }
+.steps3 li.now .n { background: var(--gold); color: var(--ink-900); }
+
+/* ---------- รายการคาบในปฏิทิน ---------- */
+
+.ev {
+  display: block; padding: 6px 10px; border-left: 3px solid var(--cal-lecture); border-radius: 6px;
+  background: var(--cal-lecture-bg); font-size: 12px; line-height: 1.45; color: var(--ink); text-align: left;
+}
+.ev b { display: block; font-size: 12.5px; }
+.ev.makeup { background: var(--cal-makeup-bg); border-left-color: var(--cal-makeup); }
+.ev.lab { background: var(--cal-lab-bg); border-left-color: var(--cal-lab); }
+.ev.off { background: var(--cal-off-bg); border-left-color: var(--cal-off); color: var(--ink-muted); }
+.ev.cancelled { background: var(--cal-off-bg); border-left-color: var(--cal-off); color: var(--ink-muted); text-decoration: line-through; }
+
+/* ---------- ตาราง (บนมือถือแสดงเป็นการ์ด) ---------- */
+
+.table-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.dtable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dtable thead th {
+  background: var(--line-soft); padding: 12px 16px; text-align: left; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-muted);
+}
+.dtable td { padding: 14px 16px; border-top: 1px solid var(--line-soft); vertical-align: middle; }
+.dtable .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dtable .id { font-weight: 700; white-space: nowrap; }
+.dtable .act { text-align: right; white-space: nowrap; }
+.dtable tfoot td { padding: 14px 16px; font-size: 14px; line-height: inherit; background: var(--line-soft); font-weight: 700; border-top: 1px solid var(--line); }
+.dtable tr.empty-row td { text-align: center; color: var(--ink-muted); padding: 40px 16px; }
+.dtable small { display: block; font-size: 12px; color: var(--ink-faint); }
+
+/* ---------- แท็บนับตามสถานะ + ตัวกรอง ---------- */
+
+.filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.filters :is(select, input) {
+  min-height: 40px; min-width: 0; flex: 0 1 170px;
+  font-family: inherit; font-size: 14px; color: var(--ink);
+  background: var(--card); border: 1px solid #d0d5dd; border-radius: var(--radius-sm); padding: 8px 12px;
+}
+.filters input[type="search"] { flex: 1 1 240px; max-width: 240px; }
+.counts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.counts button {
+  padding: 6px 14px; border: 0; border-radius: 999px; background: var(--line-soft);
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--ink-muted); cursor: pointer;
+}
+.counts button[aria-pressed="true"] { background: var(--ink-900); color: #fff; }
+
+/* ---------- Empty / Error / Skeleton ---------- */
+
+.state { display: grid; justify-items: center; gap: 10px; padding: 44px 24px; text-align: center; }
+.state .ic { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 14px; background: var(--line-soft); border: 1px dashed var(--line); font-size: 30px; }
+.state.error .ic { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); font-weight: 700; }
+.state h3 { font-size: 18px; font-weight: 700; }
+.state p { font-size: 13.5px; color: var(--ink-muted); max-width: 420px; }
+.state .btn { margin-top: 6px; }
+
+.loading-text { margin-top: 14px; text-align: center; font-size: 13px; color: var(--ink-muted); }
+.stepper-card { margin-bottom: 18px; padding: 22px 12px 18px; }
+
+.sk { display: block; height: 14px; border-radius: 6px; background: var(--line); animation: sk 1.2s ease-in-out infinite; }
+.sk + .sk { margin-top: 12px; }
+.sk.w40 { width: 40%; } .sk.w60 { width: 60%; } .sk.w80 { width: 80%; }
+.sk.lg { height: 34px; }
+.period .sk { background: rgba(255, 255, 255, .14); }
+@keyframes sk { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
+/* ---------- Modal ---------- */
+
+.modal-back {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px;
+  background: rgba(16, 24, 40, .55);
+}
+.modal {
+  width: min(560px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto;
+  background: var(--card); border-radius: 14px; box-shadow: 0 20px 48px rgba(16, 24, 40, .25); padding: 24px;
+}
+.modal h3 { font-size: 18px; font-weight: 700; }
+.modal .lead { margin-top: 4px; font-size: 13.5px; color: var(--ink-muted); }
+.modal .body { margin-top: 18px; display: grid; gap: 14px; }
+.modal .foot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+/* ---------- Toast ---------- */
+
+.toast {
+  position: fixed; left: 24px; bottom: 24px; z-index: 60; display: flex; align-items: center; gap: 12px;
+  max-width: calc(100vw - 48px); padding: 14px 20px; border-radius: 10px;
+  background: var(--ink-900); color: #fff; font-size: 14px; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, .3);
+}
+.toast .dot { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ok); font-size: 12px; }
+.toast.err .dot { background: var(--danger); }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1100px) {
+  body.app > .main { padding: 24px 24px 56px; }
+}
+
+@media (max-width: 900px) {
+  .grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.c3 > .period { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  body.app > .main { padding: 18px 16px 48px; }
+  .page-head { align-items: stretch; }
+  .page-head .tools { width: 100%; }
+  .page-head .tools .btn { flex: 1 1 auto; }
+  .grid.c3, .grid.c2 { grid-template-columns: 1fr; }
+  .steps3 { grid-template-columns: 1fr; gap: 8px; }
+  .filters :is(select, input), .filters input[type="search"] { flex: 1 1 calc(50% - 6px); max-width: none; }
+  .filters input[type="search"] { flex-basis: 100%; }
+  .counts { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .counts button { flex: none; }
+  .alert { flex-wrap: wrap; }
+  .alert .act { margin-left: 32px; }
+  .card { padding: 18px; }
+  .stepper li { font-size: 11px; }
+  .toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
+
+  /* ตาราง → การ์ด: แต่ละแถวเป็นการ์ด ช่องแสดงชื่อคอลัมน์จาก data-label */
+  .table-card:has(.dtable) { background: none; border: 0; box-shadow: none; overflow: visible; }
+  .dtable thead { display: none; }
+  .dtable, .dtable tbody, .dtable tfoot, .dtable tr, .dtable td { display: block; width: 100%; min-width: 0; }
+  .dtable tr {
+    margin-bottom: 12px; padding: 12px 16px; background: var(--card);
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .dtable td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border: 0; text-align: right; }
+  .dtable td::before { content: attr(data-label); flex: none; font-size: 12.5px; font-weight: 600; color: var(--ink-faint); text-align: left; }
+  .dtable td:not([data-label])::before { content: none; }
+  .dtable td.id { font-size: 15px; justify-content: flex-start; }
+  .dtable td.act { justify-content: stretch; padding-top: 10px; }
+  .dtable td.act .btn { flex: 1; }
+  .dtable tfoot tr { background: var(--line-soft); }
+  .dtable tfoot td { padding: 6px 0; background: none; border: 0; }
+  .dtable tfoot td:empty { display: none; }
+  .dtable tr.empty-row td { justify-content: center; }
+}

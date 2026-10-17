@@ -28,13 +28,45 @@
 
   /* ระยะ */
   --sidebar-w: 258px;
-  --topbar-h: 56px;
+  --topbar-h: 60px;
   --content-max: 880px;
+  --app-max: 1184px;     /* หน้าที่ต้องเข้าสู่ระบบ (V3) กว้างตาม Figma 1280 − ขอบ 48 */
   --radius: 12px;
+  --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .04);
+
+  /* ขนาดตัวอักษร (Figma 01 · Components) */
+  --fs-page: 26px;       /* หัวข้อหน้า 700 */
+  --fs-card: 16px;       /* หัวข้อการ์ด 700 */
+  --fs-body: 15px;       /* เนื้อหา 400 */
+  --fs-desc: 13px;       /* คำอธิบาย 400 */
+  --fs-eyebrow: 11px;    /* eyebrow 600 */
+
+  /* ชิปสถานะ: พื้น / ตัวอักษร (จุดหน้าข้อความใช้สีตัวอักษร) */
+  --st-draft-bg: #eef1f5;    --st-draft: #475467;
+  --st-sub-bg: #eef4ff;      --st-sub: #1d4ed8;
+  --st-ret-bg: #fef2f2;      --st-ret: #b42318;
+  --st-sign-bg: #fef6e0;     --st-sign: #8a5a00;
+  --st-self-bg: #e9f8f1;     --st-self: #05603a;
+  --st-recv-bg: #eef0ff;     --st-recv: #3538cd;
+  --st-done-bg: #e8f7ee;     --st-done: #067647;
+  --st-rej-bg: #f2f4f7;      --st-rej: #7a271a;
+
+  /* ประเภทคาบในปฏิทิน: พื้น / เส้นซ้าย */
+  --cal-lecture-bg: #eef1f5; --cal-lecture: #101828;
+  --cal-makeup-bg: #fef6e0;  --cal-makeup: #eab308;
+  --cal-lab-bg: #eef4ff;     --cal-lab: #2563eb;
+  --cal-off-bg: #fef2f2;     --cal-off: #dc2626;
+
+  /* กล่องข้อความ success / info (นอกจาก info เหลือง และ danger ด้านบน) */
+  --ok: #16a34a;     --ok-soft: #f0fdf4;   --ok-line: #bbf7d0;
+  --blue: #2563eb;   --blue-soft: #eff6ff; --blue-line: #bfdbfe;
 }
 
 * { box-sizing: border-box; }
+
+/* กัน class ที่ตั้ง display ไว้ทับ attribute hidden */
+[hidden] { display: none !important; }
 
 html { scroll-behavior: smooth; }
 
