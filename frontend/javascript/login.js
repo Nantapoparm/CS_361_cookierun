@@ -1,5 +1,5 @@
 // login.js — หน้าเข้าสู่ระบบ (Figma A1 ปกติ · A2 รหัสผ่านผิด · A3 ไม่มีสิทธิ์ใช้งาน · A4 กำลังเข้าสู่ระบบ)
-// Input : ชื่อผู้ใช้ Cognito (เช่น instructor) + รหัสผ่าน → Auth.login(username, password, remember) ของ auth.js (คนที่ 1)
+// Input : ชื่อผู้ใช้ Cognito (เช่น instructor) + รหัสผ่าน → Auth.login(username, password) ของ auth.js (คนที่ 1)
 // Output: เข้าสู่ระบบแล้วไปหน้า ?next= (ถ้ามี) หรือหน้าแรกของบทบาท (ROLE_HOME ใน api.js)
 // ไม่มีหน้าเปลี่ยนรหัสผ่านครั้งแรก / ลืมรหัสผ่าน ใน V3 (V3-01 ตั้งรหัสผ่านถาวรให้บัญชีทดสอบ)
 
@@ -82,7 +82,7 @@ async function onSubmit(e) {
   $('msg').innerHTML = '';
   setBusy(true);
   try {
-    await Auth.login(username, password, $('remember').checked);
+    await Auth.login(username, password);
     const user = await currentUser();
     // เข้าสู่ระบบได้แต่ไม่อยู่ใน Group ใด → ไม่ให้ใช้งาน (A3)
     if (!user?.role || !ROLE_HOME[user.role]) {

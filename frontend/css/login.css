@@ -37,9 +37,6 @@
 }
 .pw-toggle:focus-visible { outline: 2px solid var(--gold-strong); border-radius: 6px; }
 
-.remember { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-muted); cursor: pointer; }
-.remember input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink-900); }
-
 .login-btn { width: 100%; margin-top: 4px; }
 .login-btn:disabled { opacity: .5; }
 .login-back { justify-self: center; font-size: 13px; color: var(--ink-muted); }
