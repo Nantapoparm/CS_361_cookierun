@@ -376,7 +376,8 @@ paths:
 
   # ---------------------------------------------------------------
   # V3 Routes (ร่าง Route ↔ Lambda รอคนที่ 2 (#72) และคนที่ 3 (#82–#84) ยืนยัน)
-  # Lambda ของ V3 รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ และแยกการทำงานด้วย event.routeKey
+  # Lambda ของ V3 ส่วนใหญ่รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ และแยกการทำงานด้วย event.routeKey
+  # ยกเว้นปฏิทินคาบสอน (/schedule) ที่แยก Lambda ต่อ method
   # ---------------------------------------------------------------
 
   # ----- ปฏิทินคาบสอน (อาจารย์ / TA) #72 -----
@@ -427,22 +428,40 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getSchedule/invocations
     post:
       operationId: createSchedule
       security: [ { cognitoJwt: [] } ]
-      summary: เพิ่มคาบสอนประจำ (เลือกให้ใช้กับทุกสัปดาห์ถัดไปในภาคได้)
+      summary: เพิ่มคาบ ทั้งคาบสอนปกติ คาบงดสอน และคาบสอนชดเชย (แยกด้วย kind)
+      description: >-
+        เส้นเดียวรับทุกประเภท DB เก็บทั้งคาบปกติและคาบสอนชดเชยได้ในการบันทึกเดียว
+        body ส่งต่อให้ Lambda ตามที่หน้าเว็บส่งมา ฟิลด์อื่นนอกจาก kind ให้หน้าเว็บกับ Lambda ตกลงกัน
       requestBody:
         required: true
         content:
           application/json:
-            example:
-              courseId: CS361
-              type: lecture
-              room: SC3-301
-              startTime: "2026-11-03T09:30:00"
-              endTime: "2026-11-03T12:30:00"
-              repeatWeekly: true
+            schema: { $ref: '#/components/schemas/ScheduleInput' }
+            examples:
+              regular:
+                summary: คาบสอนปกติ (ใช้กับทุกสัปดาห์ถัดไปในภาค)
+                value:
+                  kind: regular
+                  courseId: CS361
+                  type: lecture
+                  room: SC3-301
+                  startTime: "2026-11-03T09:30:00"
+                  endTime: "2026-11-03T12:30:00"
+                  repeatWeekly: true
+              makeup:
+                summary: คาบสอนชดเชย
+                value:
+                  kind: makeup
+                  courseId: CS361
+                  originalDate: "2026-11-10"
+                  room: SC3-301
+                  startTime: "2026-11-14T09:30:00"
+                  endTime: "2026-11-14T12:30:00"
+                  reason: สอนชดเชยคาบวันที่ 10
       responses:
         '201': { description: สร้างสำเร็จ }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -454,7 +473,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-postSchedule/invocations
 
   /schedule/{id}:
     parameters:
@@ -465,74 +484,15 @@ paths:
     put:
       operationId: updateSchedule
       security: [ { cognitoJwt: [] } ]
-      summary: แก้ไขคาบสอนประจำ (แก้ได้จนกว่าจะยื่นคำขอของเดือนนั้น)
-      responses:
-        '200': { description: แก้ไขสำเร็จ }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '500': { $ref: '#/components/responses/ServerError' }
-      x-amazon-apigateway-integration:
-        type: AWS_PROXY
-        httpMethod: POST
-        payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
-    delete:
-      operationId: deleteSchedule
-      security: [ { cognitoJwt: [] } ]
-      summary: ลบคาบสอนประจำ
-      responses:
-        '200': { description: ลบสำเร็จ }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '500': { $ref: '#/components/responses/ServerError' }
-      x-amazon-apigateway-integration:
-        type: AWS_PROXY
-        httpMethod: POST
-        payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
-
-  /schedule/exceptions:
-    post:
-      operationId: createScheduleException
-      security: [ { cognitoJwt: [] } ]
-      summary: เพิ่มคาบงดสอนหรือคาบสอนชดเชย พร้อมเหตุผล
+      summary: แก้ไขคาบ ทุกประเภท รวมถึงทำเครื่องหมายงดสอน (แก้ได้จนกว่าจะยื่นคำขอของเดือนนั้น)
       requestBody:
         required: true
         content:
           application/json:
+            schema: { $ref: '#/components/schemas/ScheduleInput' }
             example:
-              kind: makeup
-              historyId: 12
-              originalDate: "2026-11-10"
-              startTime: "2026-11-14T09:30:00"
-              endTime: "2026-11-14T12:30:00"
-              room: SC3-301
-              reason: สอนชดเชยคาบวันที่ 10
-      responses:
-        '201': { description: สร้างสำเร็จ }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '500': { $ref: '#/components/responses/ServerError' }
-      x-amazon-apigateway-integration:
-        type: AWS_PROXY
-        httpMethod: POST
-        payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
-
-  /schedule/exceptions/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string }
-    put:
-      operationId: updateScheduleException
-      security: [ { cognitoJwt: [] } ]
-      summary: แก้ไขคาบงดสอนหรือคาบสอนชดเชย
+              kind: cancelled
+              reason: ติดประชุม
       responses:
         '200': { description: แก้ไขสำเร็จ }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -544,11 +504,11 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-putSchedule/invocations
     delete:
-      operationId: deleteScheduleException
+      operationId: deleteSchedule
       security: [ { cognitoJwt: [] } ]
-      summary: ลบคาบงดสอนหรือคาบสอนชดเชย
+      summary: ลบคาบ ทุกประเภท
       responses:
         '200': { description: ลบสำเร็จ }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -559,7 +519,7 @@ paths:
         type: AWS_PROXY
         httpMethod: POST
         payloadFormatVersion: '2.0'
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-deleteSchedule/invocations
 
   # ----- ปฏิทินงาน (นักศึกษาช่วยงาน) #72 -----
   /work-days:
@@ -1085,6 +1045,16 @@ components:
           items:
             type: string
           example: ["uploads/12345-file.pdf"]
+    ScheduleInput:
+      type: object
+      description: คาบในปฏิทิน kind บอกประเภท ฟิลด์อื่นตามที่หน้าเว็บกับ Lambda ตกลงกัน (API Gateway ไม่ตรวจ body)
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [regular, cancelled, makeup]
+          description: regular = คาบสอนปกติ, cancelled = งดสอน, makeup = สอนชดเชย
+      additionalProperties: true
     Claim:
       allOf:
         - $ref: '#/components/schemas/ClaimInput'

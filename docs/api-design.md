@@ -25,13 +25,10 @@
 
 | Method | Route | หน้าที่ | Lambda | Status ที่คืน |
 |---|---|---|---|---|---|
-| GET | `/schedule?month=YYYY-MM` | คาบของเดือน + สรุปคาบ/ชั่วโมงต่อวิชา | `cookierun-schedule` | 200, 400, 403 |
-| POST | `/schedule` | เพิ่มคาบสอนประจำ (`repeatWeekly`) | `cookierun-schedule` | 201, 400, 409 |
-| PUT | `/schedule/{id}` | แก้คาบสอนประจำ | `cookierun-schedule` | 200, 400, 404, 409 |
-| DELETE | `/schedule/{id}` | ลบคาบสอนประจำ | `cookierun-schedule` | 200, 404, 409 |
-| POST | `/schedule/exceptions` | เพิ่มคาบงดสอน / สอนชดเชย | `cookierun-schedule` | 201, 400, 409 |
-| PUT | `/schedule/exceptions/{id}` | แก้คาบงดสอน / สอนชดเชย | `cookierun-schedule` | 200, 400, 404, 409 |
-| DELETE | `/schedule/exceptions/{id}` | ลบคาบงดสอน / สอนชดเชย | `cookierun-schedule` | 200, 404, 409 |
+| GET | `/schedule?month=YYYY-MM` | คาบของเดือน + สรุปคาบ/ชั่วโมงต่อวิชา | `cookierun-getSchedule` | 200, 400, 403 |
+| POST | `/schedule` | เพิ่มคาบ ทั้งคาบปกติ (`repeatWeekly`) และสอนชดเชย แยกด้วย `kind` | `cookierun-postSchedule` | 201, 400, 409 |
+| PUT | `/schedule/{id}` | แก้คาบทุกประเภท รวมถึงทำเครื่องหมายงดสอน (`kind: cancelled`) | `cookierun-putSchedule` | 200, 400, 404, 409 |
+| DELETE | `/schedule/{id}` | ลบคาบทุกประเภท | `cookierun-deleteSchedule` | 200, 404, 409 |
 | GET | `/work-days?month=YYYY-MM` | วันทำงานของนักศึกษาช่วยงาน | `cookierun-workDays` | 200, 400 |
 | POST | `/work-days` | เพิ่มวันทำงาน | `cookierun-workDays` | 201, 400, 409 |
 | PUT | `/work-days/{id}` | แก้วันทำงาน | `cookierun-workDays` | 200, 400, 404, 409 |
@@ -49,7 +46,7 @@
 | POST | `/admin/claims/{id}/documents-received` | รับเอกสารที่เซ็นแล้ว | `cookierun-admin` | 200, 403, 404, 409 |
 | POST | `/admin/claims/send-to-finance` | ส่งการเงินเป็นชุด | `cookierun-admin` | 200, 400, 403, 409 |
 
-- Lambda ของ V3 รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย `event.routeKey` (เช่น `"DELETE /schedule/{id}"`)
+- Lambda ของ V3 ส่วนใหญ่รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย `event.routeKey` (เช่น `"POST /admin/claims/{id}/review"`) ยกเว้นปฏิทินคาบสอน (`/schedule`) ที่แยก Lambda ต่อ method ตามที่คนที่ 2 เลือก
 - `ClaimStatus` ของ V3: `draft`, `submitted`, `returned`, `approved`, `rejected`, `documents_received`, `sent_to_finance`
 - Route ที่ยังไม่มี Lambda จะตอบ `500` เมื่อส่ง token ที่ถูกต้อง และตอบ `401` เมื่อไม่มี token (Authorizer ทำงานก่อน Lambda)
 
@@ -138,9 +135,9 @@
 
 ### 2.6 Lambda ของ V3 รวม Route ตามฟีเจอร์
 
-- **Requirement:** V3 เพิ่ม 23 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
-- **Decision:** Route ใหม่ใช้ Lambda 7 ฟังก์ชันตามฟีเจอร์ (`schedule`, `workDays`, `getCurrentPeriod`, `autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย `event.routeKey` ส่วน Route ของ V2 คง Lambda เดิม
-- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (7 แทน 23) สิ่งที่แลกคือสิทธิ์ IAM ของแต่ละ Lambda กว้างขึ้นเล็กน้อย (เช่น `cookierun-admin` ทั้งอ่านและเปลี่ยนสถานะ) และต้องเขียน routing ในโค้ด
+- **Requirement:** V3 เพิ่ม 20 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
+- **Decision:** Route ใหม่ใช้ Lambda 10 ฟังก์ชัน ส่วนใหญ่รวมตามฟีเจอร์ (`workDays`, `getCurrentPeriod`, `autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย `event.routeKey` ส่วนปฏิทินคาบสอนแยกต่อ method (`getSchedule`, `postSchedule`, `putSchedule`, `deleteSchedule`) ตามที่เจ้าของ Lambda เลือก Route ของ V2 คง Lambda เดิม
+- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (10 แทน 20) สิ่งที่แลกคือสิทธิ์ IAM ของแต่ละ Lambda กว้างขึ้นเล็กน้อย (เช่น `cookierun-admin` ทั้งอ่านและเปลี่ยนสถานะ) และต้องเขียน routing ในโค้ด
 
 ## 3. Stage และ Access Log (V2)
 
