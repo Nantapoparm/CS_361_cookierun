@@ -154,11 +154,11 @@ body > .main { flex: 1; }
 .user-switch select:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
 .user-switch option { color: #111; background: #fff; }
 
-/* จอแคบ: logo + เมนู + dropdown ไม่พอในแถวเดียว → ให้ dropdown ลงไปอยู่แถวใหม่เต็มความกว้าง */
-@media (max-width: 900px) {
-  .topbar:has(.user-switch) { flex-wrap: wrap; height: auto; min-height: var(--topbar-h); row-gap: 0; padding-top: 8px; padding-bottom: 10px; }
-  .topbar:has(.user-switch) .org { display: none; }
-  .topbar:has(.user-switch) .topnav { min-height: var(--topbar-h); }
-  .user-switch { order: 3; flex: 1 0 100%; }
-  .user-switch select { flex: 1; max-width: none; min-width: 0; }
+/* อยู่ในฝั่งผู้ใช้ของแถบด้านบน: จอกว้างย่อให้พอดีแถว ; จอแคบอยู่ในแผงเมนู เต็มความกว้าง */
+.top-side .user-switch span { display: none; }
+.top-side .user-switch select { max-width: 170px; }
+@media (max-width: 1100px) {
+  .top-side .user-switch { order: 5; flex: 1 0 100%; }
+  .top-side .user-switch span { display: inline; }
+  .user-switch select, .top-side .user-switch select { flex: 1; max-width: none; min-width: 0; padding: 8px; font-size: 13px; }
 }

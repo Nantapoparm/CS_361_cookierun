@@ -170,7 +170,7 @@ async function onDraft() {
   setBusy(true); $('msg').innerHTML = '';
   try {
     await save(false);
-    $('msg').innerHTML = noteBox({ tone: 'info', label: 'บันทึกแล้ว', text: 'เก็บเป็นฉบับร่างเรียบร้อย แก้ไขได้จนกว่าจะยื่น' });
+    $('msg').innerHTML = alertBox('success', 'บันทึกแล้ว', 'เก็บเป็นฉบับร่างเรียบร้อย แก้ไขได้จนกว่าจะยื่น');
   } catch (err) { showError(err, $('msg')); }
   setBusy(false);
 }

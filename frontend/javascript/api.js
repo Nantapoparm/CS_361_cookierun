@@ -114,16 +114,13 @@ async function uploadToS3(uploadUrl, file) {
 }
 
 /* ---------- ค่าคงที่ + ตัวช่วยร่วม ---------- */
-// API มีสถานะแค่ 2 ค่า (ClaimStatus)
-const STATUS = {
-  draft:     { th: 'ฉบับร่าง', cls: 'draft' },
-  submitted: { th: 'ยื่นแล้ว · รอตรวจสอบ', cls: 'pending' }
-};
+// API V2 มีสถานะแค่ 2 ค่า (ClaimStatus) ใช้เป็นตัวเลือกในตัวกรอง — ชื่อและสีมาจาก CLAIM_STATUS ใน ui.js (ชุดเดียวกับ V3)
+const STATUS = { draft: CLAIM_STATUS.draft, submitted: CLAIM_STATUS.submitted };
 const EDITABLE = ['draft']; // API ตอบ 409 INVALID_STATE ถ้าไม่ใช่ draft
 const ROLE_TH = { instructor: 'อาจารย์', ta: 'ผู้ช่วยสอน', student_helper: 'นักศึกษาช่วยงาน' };
 
 const $ = (id) => document.getElementById(id);
-const statusBadge = (s) => `<span class="status ${STATUS[s]?.cls}">${esc(STATUS[s]?.th || s)}</span>`;
+const statusBadge = (s, printMethod) => chip(s, printMethod);
 const baht = (n) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }) + ' บาท';
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : '-');
 const termLabel = (t) => { const [s, y] = String(t || '').split('-'); return y ? `${s}/${y}` : (t || '-'); }; // '1-2569' → '1/2569'
@@ -142,16 +139,19 @@ function showError(err, el, retry) {
     UPLOAD_FAILED: err.message
   }[err.code] || 'ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง';
   const canRetry = retry && !['VALIDATION_ERROR', 'NOT_FOUND', 'INVALID_STATE'].includes(err.code);
-  el.innerHTML = noteBox({ tone: 'danger', label: 'ไม่สำเร็จ', text }) +
-    (canRetry ? '<button type="button" class="btn ghost" id="retry">ลองใหม่</button>' : '');
+  el.innerHTML = alertBox('danger', 'ไม่สำเร็จ', text,
+    canRetry ? '<button type="button" class="btn danger sm" id="retry">ลองอีกครั้ง</button>' : '');
   if (canRetry) $('retry').addEventListener('click', retry);
   console.error(err);
 }
 
+// ผู้ใช้ที่แสดงบนแถบด้านบน = { name, lastName, role } — ตอนนี้มาจากผู้ใช้ทดสอบ V2 (V3-13 เปลี่ยนเป็นข้อมูลจาก login)
+const currentUser = () => API_CONFIG.USER;
+
 async function initPage() {
   try {
     const site = await loadJSON('site.json');
-    renderTopbar(site);
+    renderTopbar(site, currentUser());
     renderFooter(site);
   } catch (e) { console.warn('โหลด site.json ไม่ได้', e); }
   renderUserSwitch();
@@ -160,11 +160,12 @@ async function initPage() {
 // dropdown สลับผู้ใช้ทดสอบบนแถบด้านบน — เปลี่ยนแล้วโหลดหน้าใหม่
 // (ถ้าเปิดคำขอของคนเดิมอยู่ จะกลับไปหน้ารายการ เพราะคนใหม่ไม่มีสิทธิ์ดู)
 function renderUserSwitch() {
-  const bar = document.querySelector('[data-mount="topbar"]');
+  // วางไว้ฝั่งผู้ใช้ของแถบด้านบน (บนมือถืออยู่ในแผงเมนู)
+  const bar = document.querySelector('[data-mount="topbar"] .top-side') || document.querySelector('[data-mount="topbar"]');
   if (!bar || $('userSwitch')) return;
   const opts = TEST_USERS.map((u) =>
     `<option value="${esc(u.userId)}">${esc(u.name)} ${esc(u.lastName)} · ${esc(ROLE_TH[u.role] || u.role)}</option>`).join('');
-  bar.insertAdjacentHTML('beforeend',
+  bar.insertAdjacentHTML('afterbegin',
     `<label class="user-switch"><span>ใช้งานเป็น</span><select id="userSwitch" aria-label="ใช้งานเป็นผู้ใช้">${opts}</select></label>`);
   $('userSwitch').value = API_CONFIG.USER.userId;
   $('userSwitch').addEventListener('change', (e) => {

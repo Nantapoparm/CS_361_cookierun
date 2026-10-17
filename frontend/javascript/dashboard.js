@@ -18,20 +18,24 @@ function fmtHours(h) {
   return mm ? `${hh} ชม. ${mm} นาที` : `${hh} ชม.`;
 }
 
+const num = (n) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+
+// data-label = ชื่อคอลัมน์ที่แสดงเมื่อแถวกลายเป็นการ์ดบนมือถือ
 const row = (c) => {
   const id = encodeURIComponent(c.id);
-  const edit = EDITABLE.includes(c.status) ? ` · <a class="link" href="form.html?id=${id}">แก้ไข</a>` : '';
+  const edit = EDITABLE.includes(c.status) ? `<a class="btn ghost sm" href="form.html?id=${id}">แก้ไข</a> ` : '';
   return `<tr>
-    <td>#${esc(c.id)}</td>
-    <td>${esc(cycleLabel(c.billingCycle))}</td>
-    <td>${esc(courseOf(c) || '-')}</td>
-    <td>${esc(termLabel(c.term))}</td>
-    <td>${esc(c.totalHours)}</td>
-    <td>${baht(c.totalAmount)}</td>
-    <td>${statusBadge(c.status)}</td>
-    <td><a class="link" href="detail.html?id=${id}">ดูรายละเอียด</a>${edit}</td>
+    <td class="id">#${esc(c.id)}</td>
+    <td data-label="วิชา">${esc(courseOf(c) || '-')}</td>
+    <td data-label="ภาคการศึกษา">${esc(termLabel(c.term))}</td>
+    <td data-label="รอบการเบิก">${esc(cycleLabel(c.billingCycle))}</td>
+    <td data-label="ชั่วโมง" class="num">${num(c.totalHours)}</td>
+    <td data-label="ยอดเบิก (บาท)" class="num">${num(c.totalAmount)}</td>
+    <td data-label="สถานะ">${statusBadge(c.status, c.printMethod)}</td>
+    <td class="act">${edit}<a class="btn ghost sm" href="detail.html?id=${id}">ดูรายละเอียด</a></td>
   </tr>`;
 };
+const msgRow = (html) => `<tr class="empty-row"><td colspan="8">${html}</td></tr>`;
 
 // '1-2569' → 25691 (ปีก่อน แล้วตามด้วยภาค) ใช้เรียงภาคจากใหม่ไปเก่า
 const termKey = (id) => { const [s, y] = String(id).split('-').map(Number); return (y || 0) * 10 + (s || 0); };
@@ -64,9 +68,9 @@ const sumOf = (list) => ({
 const sumRow = (list) => {
   const s = sumOf(list);
   return `<tr class="sum">
-    <td colspan="4">รวมทั้งหมดตามตัวกรอง (${list.length} รายการ)</td>
-    <td>${s.h}</td>
-    <td>${baht(s.a)}</td>
+    <td colspan="4">รวม ${list.length} รายการ</td>
+    <td data-label="ชั่วโมง" class="num">${num(s.h)}</td>
+    <td data-label="ยอดเบิก (บาท)" class="num">${num(s.a)}</td>
     <td colspan="2"></td>
   </tr>`;
 };
@@ -96,8 +100,11 @@ function render() {
   const start = (page - 1) * size;
   const slice = list.slice(start, start + size);
 
+  const term = $('fTerm').selectedOptions[0];
+  $('lead').textContent = `${$('fTerm').value ? term.textContent : 'ทุกภาคการศึกษา'} · ${list.length} รายการ`;
+
   if (!list.length) {
-    $('rows').innerHTML = '<tr><td colspan="8" class="empty">ไม่พบคำขอ ลองเปลี่ยนตัวกรอง หรือกด "สร้างคำขอใหม่"</td></tr>';
+    $('rows').innerHTML = msgRow(emptyState('ยังไม่มีคำขอ', 'ลองเปลี่ยนตัวกรอง หรือสร้างคำขอใหม่', { text: 'สร้างคำขอใหม่', href: 'form.html' }));
     $('foot').innerHTML = '';
     $('pageInfo').textContent = '';
     $('pager').innerHTML = '';
@@ -105,7 +112,7 @@ function render() {
   }
 
   $('rows').innerHTML = slice.map(row).join('');
-  $('foot').innerHTML = ''; // sumRow(list) รวมทุกหน้าตามตัวกรอง ไม่ใช่เฉพาะหน้านี้
+  $('foot').innerHTML = sumRow(list); // รวมทุกหน้าตามตัวกรอง ไม่ใช่เฉพาะหน้านี้
   $('pageInfo').textContent = `แสดง ${start + 1}–${start + slice.length} จาก ${list.length} รายการ`;
   $('pager').innerHTML = pagerHtml(page, pages);
 }
@@ -113,7 +120,8 @@ function render() {
 // โหลดจาก API (เมื่อเปลี่ยนภาคหรือสถานะ)
 async function loadClaims() {
   $('msg').innerHTML = '';
-  $('rows').innerHTML = '<tr><td colspan="8" class="empty">กำลังโหลด…</td></tr>';
+  $('rows').innerHTML = msgRow(skeleton(['', '', '', '']) + '<p class="loading-text">กำลังโหลดข้อมูล…</p>');
+  $('lead').textContent = '';
   $('foot').innerHTML = ''; $('pager').innerHTML = ''; $('pageInfo').textContent = '';
   try {
     all = await api.getClaims({ term: $('fTerm').value, status: $('fStatus').value });
