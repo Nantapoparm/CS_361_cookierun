@@ -1,8 +1,8 @@
 openapi: 3.0.1
 info:
   title: Teaching Compensation Claim API
-  description: API สำหรับระบบเบิกค่าตอบแทนการสอน (CS361 V2)
-  version: 2.0.0
+  description: API สำหรับระบบเบิกค่าตอบแทนการสอน (CS361 V3) ทุก Route ต้องส่ง Cognito Token ใน Header Authorization
+  version: 3.0.0
 
 # ---------------------------------------------------------------
 # CORS (API Gateway HTTP API จัดการ Preflight OPTIONS ให้เอง)
@@ -18,11 +18,12 @@ x-amazon-apigateway-cors:
     - GET
     - POST
     - PUT
+    - DELETE
     - OPTIONS
   allowHeaders:
     - Content-Type
     - Authorization   # Login: ส่ง token ผ่าน header Authorization
-    - X-User-Id
+    - X-User-Id       # V2 เท่านั้น ลบออกเมื่อ Lambda เลิกอ่าน header นี้ (#81) และหน้าเว็บเลิกส่ง (#75)
   maxAge: 3600
 
 # ---------------------------------------------------------------
@@ -37,6 +38,7 @@ paths:
   /claims:
     get:
       operationId: listClaims
+      security: [ { cognitoJwt: [] } ]
       summary: ดึงรายการคำขอ (ใช้กับ Dashboard)
       parameters:
         - name: userId
@@ -83,6 +85,7 @@ paths:
         uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getClaims/invocations
     post:
       operationId: createClaim
+      security: [ { cognitoJwt: [] } ]
       summary: สร้างคำขอใหม่หรือบันทึกร่าง
       requestBody:
         required: true
@@ -140,6 +143,7 @@ paths:
         schema: { type: string }
     get:
       operationId: getClaim
+      security: [ { cognitoJwt: [] } ]
       summary: ดูรายละเอียดคำขอ (รวมสถานะ)
       responses:
         '200':
@@ -175,6 +179,7 @@ paths:
         uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getClaimById/invocations
     put:
       operationId: updateClaim
+      security: [ { cognitoJwt: [] } ]
       summary: แก้ไขคำขอที่ยังเป็นร่าง
       requestBody:
         required: true
@@ -234,6 +239,7 @@ paths:
         schema: { type: string }
     post:
       operationId: submitClaim
+      security: [ { cognitoJwt: [] } ]
       summary: ยื่นคำขอ (draft -> submitted)
       responses:
         '200':
@@ -273,6 +279,7 @@ paths:
   /terms:
     get:
       operationId: listTerms
+      security: [ { cognitoJwt: [] } ]
       summary: ดึงข้อมูลภาคการศึกษาและรอบการเบิก
       responses:
         '200':
@@ -303,6 +310,7 @@ paths:
   /rates:
     get:
       operationId: listRates
+      security: [ { cognitoJwt: [] } ]
       summary: ดึงอัตราค่าตอบแทน
       responses:
         '200':
@@ -334,6 +342,7 @@ paths:
   /uploads/presigned-url:
     get:
       operationId: getUploadPresignedUrl
+      security: [ { cognitoJwt: [] } ]
       summary: ขอ S3 Presigned URL สำหรับอัปโหลดไฟล์หลักฐาน (เช่น PDF, รูปภาพ)
       description: Frontend อัปโหลดไฟล์ตรงด้วย HTTP PUT ไปที่ uploadUrl เข้า bucket สำหรับไฟล์หลักฐานโดยเฉพาะ (แยกจาก bucket ของ Frontend)
       parameters:
@@ -364,8 +373,652 @@ paths:
         payloadFormatVersion: '2.0'
         uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getPresignedUrl/invocations
 
+
+  # ---------------------------------------------------------------
+  # V3 Routes (ร่าง Route ↔ Lambda รอคนที่ 2 (#72) และคนที่ 3 (#82–#84) ยืนยัน)
+  # Lambda ของ V3 รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ และแยกการทำงานด้วย event.routeKey
+  # ---------------------------------------------------------------
+
+  # ----- ปฏิทินคาบสอน (อาจารย์ / TA) #72 -----
+  /schedule:
+    get:
+      operationId: getMonthSchedule
+      security: [ { cognitoJwt: [] } ]
+      summary: คาบของเดือน (ตารางสอนประจำ + งดสอน/สอนชดเชย) พร้อมสรุปคาบและชั่วโมงต่อวิชา
+      parameters:
+        - name: month
+          in: query
+          required: true
+          description: เดือนในรูปแบบ YYYY-MM
+          schema: { type: string, example: "2026-11" }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  month: "2026-11"
+                  periods:
+                    - date: "2026-11-03"
+                      historyId: 12
+                      courseId: CS361
+                      type: lecture
+                      room: SC3-301
+                      startTime: "09:30"
+                      endTime: "12:30"
+                      kind: regular
+                    - date: "2026-11-10"
+                      historyId: 12
+                      courseId: CS361
+                      kind: cancelled
+                      exceptionId: 4
+                      reason: ติดประชุม
+                  summary:
+                    - courseId: CS361
+                      periods: 3
+                      hours: 9
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+    post:
+      operationId: createSchedule
+      security: [ { cognitoJwt: [] } ]
+      summary: เพิ่มคาบสอนประจำ (เลือกให้ใช้กับทุกสัปดาห์ถัดไปในภาคได้)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              courseId: CS361
+              type: lecture
+              room: SC3-301
+              startTime: "2026-11-03T09:30:00"
+              endTime: "2026-11-03T12:30:00"
+              repeatWeekly: true
+      responses:
+        '201': { description: สร้างสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+
+  /schedule/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: updateSchedule
+      security: [ { cognitoJwt: [] } ]
+      summary: แก้ไขคาบสอนประจำ (แก้ได้จนกว่าจะยื่นคำขอของเดือนนั้น)
+      responses:
+        '200': { description: แก้ไขสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+    delete:
+      operationId: deleteSchedule
+      security: [ { cognitoJwt: [] } ]
+      summary: ลบคาบสอนประจำ
+      responses:
+        '200': { description: ลบสำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+
+  /schedule/exceptions:
+    post:
+      operationId: createScheduleException
+      security: [ { cognitoJwt: [] } ]
+      summary: เพิ่มคาบงดสอนหรือคาบสอนชดเชย พร้อมเหตุผล
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              kind: makeup
+              historyId: 12
+              originalDate: "2026-11-10"
+              startTime: "2026-11-14T09:30:00"
+              endTime: "2026-11-14T12:30:00"
+              room: SC3-301
+              reason: สอนชดเชยคาบวันที่ 10
+      responses:
+        '201': { description: สร้างสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+
+  /schedule/exceptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: updateScheduleException
+      security: [ { cognitoJwt: [] } ]
+      summary: แก้ไขคาบงดสอนหรือคาบสอนชดเชย
+      responses:
+        '200': { description: แก้ไขสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+    delete:
+      operationId: deleteScheduleException
+      security: [ { cognitoJwt: [] } ]
+      summary: ลบคาบงดสอนหรือคาบสอนชดเชย
+      responses:
+        '200': { description: ลบสำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-schedule/invocations
+
+  # ----- ปฏิทินงาน (นักศึกษาช่วยงาน) #72 -----
+  /work-days:
+    get:
+      operationId: listWorkDays
+      security: [ { cognitoJwt: [] } ]
+      summary: วันทำงานของเดือน (เก็บใน work_information ที่ claimId ยังว่าง)
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, example: "2026-11" }
+      responses:
+        '200': { description: สำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-workDays/invocations
+    post:
+      operationId: createWorkDay
+      security: [ { cognitoJwt: [] } ]
+      summary: เพิ่มวันทำงาน
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              offeringId: 7
+              workDate: "2026-11-04"
+              startTime: "13:00"
+              endTime: "16:00"
+      responses:
+        '201': { description: สร้างสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-workDays/invocations
+
+  /work-days/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: updateWorkDay
+      security: [ { cognitoJwt: [] } ]
+      summary: แก้ไขวันทำงาน
+      responses:
+        '200': { description: แก้ไขสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-workDays/invocations
+    delete:
+      operationId: deleteWorkDay
+      security: [ { cognitoJwt: [] } ]
+      summary: ลบวันทำงาน
+      responses:
+        '200': { description: ลบสำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-workDays/invocations
+
+  /work-days/clock:
+    post:
+      operationId: clockWorkDay
+      security: [ { cognitoJwt: [] } ]
+      summary: ลงเวลาเข้า-ออกของวันนี้
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              action: in
+              offeringId: 7
+      responses:
+        '200': { description: บันทึกสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-workDays/invocations
+
+  # ----- รอบการเบิกปัจจุบัน #72 -----
+  /current-period:
+    get:
+      operationId: getCurrentPeriod
+      security: [ { cognitoJwt: [] } ]
+      summary: ภาคการศึกษาและรอบการเบิกปัจจุบัน (การ์ด "รอบการเบิกปัจจุบัน")
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  academicYear: 2569
+                  semester: 1
+                  claimMonth: "2026-10"
+                  deadline: "2026-11-05"
+                  daysLeft: 19
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-getCurrentPeriod/invocations
+
+  # ----- เติมข้อมูลคำขออัตโนมัติ #82 -----
+  /claims/autofill:
+    post:
+      operationId: autofillClaim
+      security: [ { cognitoJwt: [] } ]
+      summary: สร้างร่างคำขอจากปฏิทิน (1 คำขอ = 1 รายวิชา ต่อ 1 เดือน)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              offeringId: 7
+              month: "2026-10"
+      responses:
+        '200': { description: เดือนนั้นไม่มีคาบในปฏิทิน (ผลว่าง สำหรับหน้า ST3) }
+        '201': { description: สร้างร่างคำขอสำเร็จ (status = draft) }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-autofillClaim/invocations
+
+  # ----- ช่องทางยื่นและประวัติคำขอ #84 -----
+  /claims/{id}/print-method:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: updatePrintMethod
+      security: [ { cognitoJwt: [] } ]
+      summary: เปลี่ยนช่องทางยื่น (self_print → sign_with_staff) ได้จนกว่าเจ้าหน้าที่จะตรวจเสร็จ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              printMethod: sign_with_staff
+      responses:
+        '200': { description: เปลี่ยนสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-claimWorkflow/invocations
+
+  /claims/{id}/actions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listClaimActions
+      security: [ { cognitoJwt: [] } ]
+      summary: ประวัติการดำเนินการของคำขอ (จาก claim_actions) ผู้ใช้เห็นเฉพาะคำขอของตนเอง
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - action: submitted
+                    fromStatus: draft
+                    toStatus: submitted
+                    actor: สมชาย อยู่เย็น
+                    note: null
+                    createdAt: "2026-10-20T08:00:00Z"
+                  - action: returned
+                    fromStatus: submitted
+                    toStatus: returned
+                    actor: เจ้าหน้าที่
+                    note: แก้ชั่วโมงวันที่ 15
+                    createdAt: "2026-10-21T03:12:00Z"
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-claimWorkflow/invocations
+
+  # ----- PDF #83 -----
+  /claims/{id}/pdf:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getClaimPdf
+      security: [ { cognitoJwt: [] } ]
+      summary: สร้าง PDF ของคำขอและคืน Presigned URL อายุสั้น
+      description: นักศึกษาช่วยงานได้แบบฟอร์มเปล่า ฉบับพิมพ์จริงดาวน์โหลดได้หลังเจ้าหน้าที่ตรวจผ่านเท่านั้น
+      parameters:
+        - name: type
+          in: query
+          description: claim = แบบฟอร์มเบิก, makeup = แบบฟอร์มขอสอนชดเชย
+          schema: { type: string, enum: [claim, makeup], default: claim }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  downloadUrl: "https://<uploads-bucket-name>.s3.amazonaws.com/pdf/c001.pdf?X-Amz-Expires=300&X-Amz-Signature=..."
+                  expiresIn: 300
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-generatePdf/invocations
+
+  # ----- Admin #84 (Lambda ตรวจ cognito:groups = admin เอง ไม่ใช่ API Gateway) -----
+  /admin/claims:
+    get:
+      operationId: adminListClaims
+      security: [ { cognitoJwt: [] } ]
+      summary: รายการคำขอทั้งหมด กรองและค้นหาได้ พร้อมจำนวนตามสถานะ (AD1, AD2)
+      parameters:
+        - { name: role, in: query, schema: { type: string, enum: [instructor, ta, student_helper] } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ClaimStatus' } }
+        - { name: month, in: query, description: รอบการเบิก YYYY-MM, schema: { type: string } }
+        - { name: offeringId, in: query, schema: { type: string } }
+        - { name: q, in: query, description: ค้นหาด้วยชื่อหรือเลขที่คำขอ, schema: { type: string } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  counts: { submitted: 4, approved: 2, documents_received: 1 }
+                  items: []
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
+  /admin/claims/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: adminGetClaim
+      security: [ { cognitoJwt: [] } ]
+      summary: รายละเอียดคำขอสำหรับตรวจ (คาบเทียบตารางสอน ชั่วโมงสะสมเทียบเพดาน) (AD3)
+      responses:
+        '200': { description: สำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
+  /admin/claims/{id}/review:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: adminReviewClaim
+      security: [ { cognitoJwt: [] } ]
+      summary: ผลตรวจ approve / reject / return (reject และ return ต้องมีหมายเหตุ) (AD4)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              decision: return
+              note: ชั่วโมงวันที่ 15 ไม่ตรงตารางสอน
+              workIds: [101, 104]
+      responses:
+        '200': { description: เปลี่ยนสถานะสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
+  /admin/claims/{id}/printed:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: adminMarkPrinted
+      security: [ { cognitoJwt: [] } ]
+      summary: บันทึกว่าเจ้าหน้าที่พิมพ์เอกสารแล้ว กันพิมพ์ซ้ำ (AD5)
+      responses:
+        '200': { description: บันทึกสำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
+  /admin/claims/{id}/documents-received:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: adminDocumentsReceived
+      security: [ { cognitoJwt: [] } ]
+      summary: รับเอกสารที่เซ็นแล้ว approved → documents_received (AD5, AD7)
+      responses:
+        '200': { description: เปลี่ยนสถานะสำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
+  /admin/claims/send-to-finance:
+    post:
+      operationId: adminSendToFinance
+      security: [ { cognitoJwt: [] } ]
+      summary: ส่งการเงินเป็นชุด documents_received → sent_to_finance (AD6)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              claimIds: [c001, c002, c007]
+      responses:
+        '200': { description: เปลี่ยนสถานะทุกคำขอในชุดสำเร็จ }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
 components:
+  # ---------------------------------------------------------------
+  # JWT Authorizer (Cognito) ผูกกับทุก operation ผ่าน security: cognitoJwt
+  # API Gateway ตรวจลายเซ็น อายุ issuer และ aud/client_id ของ token ก่อนเรียก Lambda
+  # ไม่มี token หรือ token ไม่ถูกต้อง -> 401 โดยไม่เรียก Lambda
+  # ส่วนสิทธิ์ตามบทบาท (cognito:groups) ตรวจใน Lambda (#81)
+  # ---------------------------------------------------------------
+  securitySchemes:
+    cognitoJwt:
+      type: oauth2
+      flows: {}
+      x-amazon-apigateway-authorizer:
+        type: jwt
+        identitySource: $request.header.Authorization
+        jwtConfiguration:
+          issuer: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_tGEzAfQt2
+          audience:
+            - 5ikoqjohoavik8c91f3ph9qeck
+
   responses:
+    Unauthorized:
+      description: ไม่มี token หรือ token ไม่ถูกต้อง/หมดอายุ (API Gateway ตอบเอง ไม่ผ่าน Lambda)
+      content:
+        application/json:
+          example:
+            message: Unauthorized
+    Forbidden:
+      description: เข้าสู่ระบบแล้วแต่ไม่มีสิทธิ์ (เช่น ไม่ใช่ admin หรือไม่พบผู้ใช้ที่ผูกกับ cognitoSub)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            success: false
+            error: { code: FORBIDDEN, message: "ไม่มีสิทธิ์เข้าถึง" }
     BadRequest:
       description: ข้อมูลที่ส่งมาไม่ถูกต้อง
       content:
@@ -402,7 +1055,7 @@ components:
   schemas:
     ClaimStatus:
       type: string
-      enum: [draft, submitted]
+      enum: [draft, submitted, returned, approved, rejected, documents_received, sent_to_finance]
     ClaimInput:
       type: object
       required: [userId, role, term, billingCycle, items]
