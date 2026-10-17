@@ -25,7 +25,9 @@ const ROLE_POSITION = { instructor: 'อาจารย์ผู้สอน', t
 
 // อักษรย่อในวงกลม: พยัญชนะแรกของชื่อและนามสกุล (ข้ามสระหน้า เ แ โ ใ ไ)
 const initialOf = (s) => (String(s || '').replace(/^[เแโใไ]/, '').match(/[ก-ฮA-Za-z]/) || [''])[0];
-const initials = (u) => initialOf(u.name) + initialOf(u.lastName);
+const initials = (u) => (initialOf(u.name) + initialOf(u.lastName)) || initialOf(u.username).toUpperCase() || '?';
+// ชื่อที่แสดง: ชื่อ-นามสกุลจาก ID Token ; บัญชีที่ยังไม่มี given_name / family_name → ใช้ username
+const displayName = (u) => `${u.name || ''} ${u.lastName || ''}`.trim() || u.username || '';
 
 function navLinks(items, role) {
   const page = location.pathname.split('/').pop();
@@ -44,7 +46,7 @@ function renderTopbar(site, user) {
   const side = user
     ? `<span class="role-chip ${user.role === 'admin' ? 'staff' : ''}">${esc(ROLE_CHIP[user.role] || user.role)}</span>
        <span class="who-box">
-         <span class="who-name">${esc(`${user.name || ''} ${user.lastName || ''}`.trim())}</span>
+         <span class="who-name">${esc(displayName(user))}</span>
          <span class="who-pos">${esc(ROLE_POSITION[user.role] || '')}</span>
        </span>
        <span class="avatar" aria-hidden="true">${esc(initials(user))}</span>

@@ -203,7 +203,7 @@ async function initForm() {
   const U = await initPage();
   if (!U) return;
   role = U.role;
-  $('who').innerHTML = `ผู้ขอเบิก: <b>${esc(U.name)} ${esc(U.lastName)}</b>`;
+  $('who').innerHTML = `ผู้ขอเบิก: <b>${esc(displayName(U))}</b>`;
   items = [blank()];
   try {
     await Promise.all([

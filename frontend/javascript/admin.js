@@ -4,7 +4,7 @@
 async function initAdmin() {
   const user = await initPage(STAFF);
   if (!user) return;
-  $('hello').textContent = `สวัสดี ${`${user.name || ''} ${user.lastName || ''}`.trim() || 'เจ้าหน้าที่'}`;
+  $('hello').textContent = `สวัสดี ${displayName(user) || 'เจ้าหน้าที่'}`;
   $('body').innerHTML = emptyState('หน้าเจ้าหน้าที่กำลังพัฒนา', 'ภาพรวมรอบการเบิก รายการคำขอ และเคาน์เตอร์เซ็นเอกสาร จะเปิดใช้งานในรอบถัดไป');
 }
 
