@@ -1,5 +1,5 @@
 // login.js — หน้าเข้าสู่ระบบ (Figma A1 ปกติ · A2 รหัสผ่านผิด · A3 ไม่มีสิทธิ์ใช้งาน · A4 กำลังเข้าสู่ระบบ)
-// Input : อีเมล + รหัสผ่าน → Auth.login(email, password, remember) ของ auth.js (คนที่ 1)
+// Input : ชื่อผู้ใช้ Cognito (เช่น instructor) + รหัสผ่าน → Auth.login(username, password, remember) ของ auth.js (คนที่ 1)
 // Output: เข้าสู่ระบบแล้วไปหน้า ?next= (ถ้ามี) หรือหน้าแรกของบทบาท (ROLE_HOME ใน api.js)
 // ไม่มีหน้าเปลี่ยนรหัสผ่านครั้งแรก / ลืมรหัสผ่าน ใน V3 (V3-01 ตั้งรหัสผ่านถาวรให้บัญชีทดสอบ)
 
@@ -36,13 +36,13 @@ function renderPeriod() {
 /* ---------- ข้อความผิดพลาด ---------- */
 
 const MSG = {
-  wrong: ['เข้าสู่ระบบไม่สำเร็จ', 'อีเมลหรือรหัสผ่านไม่ถูกต้อง'],
+  wrong: ['เข้าสู่ระบบไม่สำเร็จ', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'],
   noGroup: ['บัญชีนี้ยังไม่มีสิทธิ์ใช้งานระบบเบิก', 'บัญชีของคุณถูกต้อง แต่ยังไม่ได้ลงทะเบียนเป็นอาจารย์ / TA / นักศึกษาช่วยงาน หรือเจ้าหน้าที่ กรุณาติดต่อเจ้าหน้าที่โครงการ'],
   notReady: ['บัญชียังไม่พร้อมใช้งาน', 'กรุณาติดต่อเจ้าหน้าที่โครงการเพื่อเปิดใช้งานบัญชี'],
   tooMany: ['ลองเข้าสู่ระบบหลายครั้งเกินไป', 'กรุณารอสักครู่แล้วลองใหม่'],
   network: ['เชื่อมต่อไม่ได้', 'ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'],
   noAuth: ['ระบบเข้าสู่ระบบยังไม่พร้อม', 'ไม่พบโมดูล auth.js กรุณาแจ้งผู้ดูแลระบบ'],
-  empty: ['กรอกข้อมูลไม่ครบ', 'กรุณากรอกอีเมลและรหัสผ่าน']
+  empty: ['กรอกข้อมูลไม่ครบ', 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน']
 };
 
 // error.code จาก Cognito (ผ่าน auth.js) → ชุดข้อความ
@@ -74,15 +74,15 @@ function setBusy(on) {
 
 async function onSubmit(e) {
   e.preventDefault();
-  const email = $('email').value.trim();
+  const username = $('username').value.trim();
   const password = $('password').value;
-  if (!email || !password) { showMsg(MSG.empty); (email ? $('password') : $('email')).focus(); return; }
+  if (!username || !password) { showMsg(MSG.empty); (username ? $('password') : $('username')).focus(); return; }
   if (!hasAuth()) { showMsg(MSG.noAuth); return; }
 
   $('msg').innerHTML = '';
   setBusy(true);
   try {
-    await Auth.login(email, password, $('remember').checked);
+    await Auth.login(username, password, $('remember').checked);
     const user = await currentUser();
     // เข้าสู่ระบบได้แต่ไม่อยู่ใน Group ใด → ไม่ให้ใช้งาน (A3)
     if (!user?.role || !ROLE_HOME[user.role]) {
@@ -116,7 +116,7 @@ async function initLogin() {
     $('pwToggle').textContent = show ? 'ซ่อน' : 'แสดง';
     $('pwToggle').setAttribute('aria-pressed', String(show));
   });
-  $('email').focus();
+  $('username').focus();
 }
 
 document.addEventListener('DOMContentLoaded', initLogin);
