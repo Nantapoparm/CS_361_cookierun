@@ -52,7 +52,7 @@ function msgOf(err) {
   if (['NO_GROUP', 'NoGroup', 'FORBIDDEN'].includes(code)) return MSG.noGroup;
   if (['UserNotConfirmedException', 'PasswordResetRequiredException', 'NEW_PASSWORD_REQUIRED'].includes(code)) return MSG.notReady;
   if (['TooManyRequestsException', 'LimitExceededException', 'TooManyFailedAttemptsException'].includes(code)) return MSG.tooMany;
-  if (code === 'NetworkError' || err instanceof TypeError) return MSG.network;
+  if (['NetworkError', 'AUTH_NETWORK_ERROR'].includes(code) || err instanceof TypeError) return MSG.network;
   return ['เข้าสู่ระบบไม่สำเร็จ', 'ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง'];
 }
 
