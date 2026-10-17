@@ -1,0 +1,65 @@
+/* login.css — หน้าเข้าสู่ระบบ (Figma A1–A4): ซ้ายพื้นกรมท่า + ขวาการ์ด LOGIN ; มือถือเรียงบนลงล่าง */
+
+.login-page { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr; background: var(--page); }
+
+/* ---------- ฝั่งซ้าย ---------- */
+
+.login-hero { background: var(--ink-900); color: #fff; display: flex; align-items: center; padding: 64px; }
+.login-hero-in { width: 100%; max-width: 480px; }
+.login-logo { display: block; height: 66px; width: auto; }   /* ไฟล์ 50x66 px อย่าแสดงใหญ่กว่านี้ */
+.login-org { margin-top: 18px; font-size: 12px; font-weight: 700; letter-spacing: .14em; color: var(--gold); }
+.login-hero h1 { margin-top: 40px; font-size: 32px; font-weight: 700; line-height: 1.35; }
+.login-rule { width: 46px; height: 3px; margin: 18px 0; border-radius: 2px; background: var(--gold); }
+.login-lead { font-size: 14px; color: rgba(255, 255, 255, .7); }
+.login-period { margin-top: 40px; padding: 24px; border: 1px solid rgba(255, 255, 255, .14); border-radius: var(--radius); background: rgba(255, 255, 255, .06); }
+.login-period:empty { display: none; }
+.login-period .eyebrow { font-size: 11px; letter-spacing: .18em; color: rgba(255, 255, 255, .6); }
+.login-period .t { margin-top: 4px; font-size: 22px; font-weight: 700; }
+.login-period .d { margin-top: 4px; font-size: 13px; color: rgba(255, 255, 255, .7); }
+
+/* ---------- ฝั่งขวา: การ์ด ---------- */
+
+.login-main { display: grid; place-items: center; padding: 48px 24px; }
+.login-card {
+  width: min(440px, 100%); display: grid; gap: 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 22px 24px;
+}
+.login-card h2 { font-size: 24px; font-weight: 700; letter-spacing: .02em; }
+.login-card .lead { margin-top: -8px; font-size: 14px; color: var(--ink-muted); }
+.login-card #msg:empty { display: none; }
+.login-card .alert .body b { display: block; }
+
+.pw { position: relative; }
+.pw input { padding-right: 64px; }
+.pw-toggle {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  padding: 6px 8px; border: 0; background: none; font-family: inherit; font-size: 12.5px; color: var(--ink-muted); cursor: pointer;
+}
+.pw-toggle:focus-visible { outline: 2px solid var(--gold-strong); border-radius: 6px; }
+
+.remember { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-muted); cursor: pointer; }
+.remember input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink-900); }
+
+.login-btn { width: 100%; margin-top: 4px; }
+.login-btn:disabled { opacity: .5; }
+.login-back { justify-self: center; font-size: 13px; color: var(--ink-muted); }
+.login-back:hover { color: var(--ink); text-decoration: underline; }
+
+/* ---------- จอแคบ: หัวกรมท่าย่อ แล้วการ์ดอยู่ใต้ ---------- */
+
+@media (max-width: 900px) {
+  .login-page { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .login-hero { padding: 28px 24px 26px; }
+  .login-logo { height: 44px; }
+  .login-hero h1 { margin-top: 18px; font-size: 24px; }
+  .login-rule { margin: 12px 0; }
+  .login-lead br { display: none; }
+  .login-period { margin-top: 20px; padding: 16px 18px; }
+  .login-period .t { font-size: 18px; }
+  .login-main { place-items: start center; padding: 24px 16px 40px; }
+}
+
+@media (max-width: 640px) {
+  .login-lead { display: none; }
+  .login-hero h1 { font-size: 22px; }
+}

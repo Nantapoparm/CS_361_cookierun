@@ -14,8 +14,8 @@ const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
 let claimId = new URLSearchParams(location.search).get('id');
 let terms = [], rates = [], items = [], attachments = []; // attachments = [{ name, key }]
-// บทบาทล็อกตามผู้ใช้ — backend คิดเงินจาก role ใน user_information ไม่ได้ใช้ค่าที่ส่งไป
-let role = API_CONFIG.USER.role;
+// บทบาทล็อกตามผู้ที่เข้าสู่ระบบ (จาก token) — backend คิดเงินจาก role ใน user_information ไม่ได้ใช้ค่าที่ส่งไป
+let role = '';
 let term = '', cycle = null; // ภาค (เช่น '1-2569') และรอบ (1|2) ที่ผู้ใช้เลือก
 const MAX_H = 24, MAX_M = 59; // นาทีต้อง 0–59 (60 นาที = 1 ชม.) ; DB: hours ต่อรายการไม่เกิน 24
 const blank = () => ({ date: '', h: '', m: '', note: '' });
@@ -125,7 +125,6 @@ function renderFiles() {
 
 // ข้ามแถวที่ว่างทั้งแถว; ใส่ courseCode เดียวกันทุก item
 const collect = () => ({
-  userId: API_CONFIG.USER.userId,
   role,
   term,
   billingCycle: cycle,
@@ -201,8 +200,9 @@ async function onFile(e) {
 }
 
 async function initForm() {
-  initPage();
-  const U = API_CONFIG.USER;
+  const U = await initPage();
+  if (!U) return;
+  role = U.role;
   $('who').innerHTML = `ผู้ขอเบิก: <b>${esc(U.name)} ${esc(U.lastName)}</b>`;
   items = [blank()];
   try {

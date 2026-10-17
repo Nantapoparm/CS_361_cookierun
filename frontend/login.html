@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เข้าสู่ระบบ | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/login.css">
+</head>
+<body class="login-page">
+  <aside class="login-hero">
+    <div class="login-hero-in">
+      <a href="index.html"><img class="login-logo" src="assets/logo.png" alt="ตราโดม มหาวิทยาลัยธรรมศาสตร์"></a>
+      <div class="login-org">COMPUTER SCIENCE · THAMMASAT UNIVERSITY</div>
+      <h1>ระบบเบิกค่าตอบแทนการสอน</h1>
+      <div class="login-rule"></div>
+      <p class="login-lead">บันทึกคาบสอนในปฏิทิน สร้างคำขอได้ในคลิกเดียว<br>ดูตัวอย่างเอกสารตามแบบฟอร์มจริง และติดตามสถานะได้ในที่เดียว</p>
+      <div class="login-period" id="period"></div>
+    </div>
+  </aside>
+
+  <main class="login-main">
+    <form class="login-card" id="loginForm" novalidate>
+      <h2>LOGIN</h2>
+      <p class="lead">ใช้อีเมลและรหัสผ่านที่ได้รับจากเจ้าหน้าที่โครงการ</p>
+      <div id="msg"></div>
+
+      <div class="field">
+        <label for="email">อีเมล</label>
+        <input type="email" id="email" name="email" autocomplete="username" placeholder="name@example.com" required>
+      </div>
+      <div class="field">
+        <label for="password">รหัสผ่าน</label>
+        <div class="pw">
+          <input type="password" id="password" name="password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" id="pwToggle" aria-pressed="false" aria-controls="password">แสดง</button>
+        </div>
+      </div>
+      <label class="remember"><input type="checkbox" id="remember" checked> จดจำฉันไว้ในเครื่องนี้</label>
+
+      <button type="submit" class="btn login-btn" id="btnLogin">เข้าสู่ระบบ</button>
+      <a class="login-back" href="index.html">← กลับหน้าข้อมูลการเบิก</a>
+    </form>
+  </main>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/ui.js"></script>
+  <script src="javascript/config.js"></script>
+  <script src="javascript/auth.js"></script>
+  <!-- ทดสอบในเครื่องก่อนมี auth.js ของคนที่ 1: โหลด auth.stub.js (ไม่อยู่ใน repo) ลบบรรทัดนี้ได้เมื่อ auth.js พร้อม -->
+  <script>window.Auth || document.write('<script src="javascript/auth.stub.js"><\/script>');</script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/login.js"></script>
+</body>
+</html>

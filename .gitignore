@@ -1,0 +1,5 @@
+# ตัวแทน auth.js สำหรับทดสอบในเครื่อง (V3-13) — ห้ามขึ้น repo
+frontend/javascript/auth.stub.js
+
+# ตั้งค่า editor ส่วนตัว
+.vscode/

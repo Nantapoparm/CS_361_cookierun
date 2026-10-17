@@ -1,5 +1,5 @@
 // dashboard.js — หน้ารายการคำขอ
-// Input : ตัวกรองภาคการศึกษา (เช่น 1-2569) และสถานะ (draft | submitted) → GET /claims?userId=&term=&status=
+// Input : ตัวกรองภาคการศึกษา (เช่น 1-2569) และสถานะ (draft | submitted) → GET /claims?term=&status= (ผู้ใช้มาจาก token)
 //         ตัวกรองรอบการเบิก (billingCycle) และวิชา (courseCode) กรองฝั่ง FE เพราะ API ไม่มี query นี้
 // Output: ตารางคำขอ (ใหม่ → เก่า) แบ่งหน้า + แถวรวมชั่วโมง/ยอดเบิกของทุกหน้าตามตัวกรอง
 //         ยอดรวมนับทั้งฉบับร่างและที่ยื่นแล้ว
@@ -135,7 +135,7 @@ async function loadClaims() {
 }
 
 async function initDashboard() {
-  initPage();
+  if (!(await initPage())) return;
   $('fStatus').insertAdjacentHTML('beforeend',
     Object.entries(STATUS).map(([id, s]) => `<option value="${id}">${esc(s.th)}</option>`).join(''));
   try {

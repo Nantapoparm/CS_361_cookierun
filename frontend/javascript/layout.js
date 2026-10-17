@@ -17,7 +17,7 @@ const NAV_ADMIN = [
   { href: 'admin-counter.html', text: 'เคาน์เตอร์เซ็นเอกสาร', match: ['admin-counter.html'] }
 ];
 // หน้าที่ยังไม่ได้สร้าง (V3-14, V3-15) แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
-const NAV_SOON = new Set(['home.html', 'calendar.html', 'admin.html', 'admin-claims.html', 'admin-counter.html']);
+const NAV_SOON = new Set(['home.html', 'calendar.html', 'admin-claims.html', 'admin-counter.html']);
 
 // ป้ายบทบาท + ตำแหน่งใต้ชื่อ
 const ROLE_CHIP = { instructor: 'อาจารย์', ta: 'TA', student_helper: 'นศ.ช่วยงาน', admin: 'เจ้าหน้าที่' };
@@ -49,10 +49,10 @@ function renderTopbar(site, user) {
        </span>
        <span class="avatar" aria-hidden="true">${esc(initials(user))}</span>
        <button type="button" class="btn-out" data-logout>ออกจากระบบ</button>`
-    : `<a class="btn-in" href="${esc(site.sidebar?.login?.url || 'dashboard.html')}">เข้าสู่ระบบ</a>`;
+    : `<a class="btn-in" href="${esc(site.sidebar?.login?.url || 'login.html')}">เข้าสู่ระบบ</a>`;
 
   const bar = mount('topbar', `
-    <a class="brand" href="${user ? 'dashboard.html' : 'index.html'}">
+    <a class="brand" href="${user ? (user.role === 'admin' ? 'admin.html' : 'dashboard.html') : 'index.html'}">
       <img class="brand-logo" src="${esc(m.logo)}" alt="${esc(m.logoAlt)}">
       <span>
         <span class="brand-name">${esc(m.brand)}</span>
@@ -77,14 +77,10 @@ function renderTopbar(site, user) {
   bar.querySelector('[data-logout]')?.addEventListener('click', logoutNow);
 }
 
-// ออกจากระบบ: ใช้ Auth ของคนที่ 1 ถ้ามี (V3-13) ไม่งั้นกลับหน้าข้อมูลการเบิก
-function logoutNow() {
-  if (typeof Auth !== 'undefined' && Auth.logout) {
-    Auth.logout();
-    location.href = 'login.html';
-  } else {
-    location.href = 'index.html';
-  }
+// ออกจากระบบ: ลบ token ผ่าน Auth (auth.js ของคนที่ 1) แล้วกลับหน้า login
+async function logoutNow() {
+  try { if (typeof Auth !== 'undefined' && Auth.logout) await Auth.logout(); } catch { /* ลบไม่ได้ก็ยังพาไปหน้า login */ }
+  location.href = 'login.html';
 }
 
 function renderHero(site) {
