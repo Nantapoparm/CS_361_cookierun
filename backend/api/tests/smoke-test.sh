@@ -97,16 +97,27 @@ fi
 
 # ---------- JWT Authorizer (V3) ----------
 echo "=== JWT Authorizer ==="
+# Lambda ของ V2 ตอบ 401 เองเมื่อไม่มี X-User-Id จึงส่ง X-User-Id ทุกครั้ง (จนกว่า #81 จะเลิกใช้)
+# แล้วตรวจ body ว่าเป็น {"message":"Unauthorized"} ของ API Gateway ไม่ใช่ 401 ของ Lambda
+UID_H="X-User-Id: $X_USER_ID"
 # code_of <curl args...> -> HTTP status
-code_of() { curl -s --max-time 20 -o /dev/null -w "%{http_code}" "$@"; }
+code_of() { curl -s --max-time 20 -o /dev/null -w "%{http_code}" -H "$UID_H" "$@"; }
+# authz_401 <ชื่อ> <curl args...> -> ผ่านเมื่อได้ 401 จาก Authorizer
+authz_401() {
+  local name="$1" out code body; shift
+  out=$(curl -s --max-time 20 -w $'\n%{http_code}' -H "$UID_H" "$@")
+  code="${out##*$'\n'}"; body="${out%$'\n'*}"
+  if [ "$code" = "401" ] && printf '%s' "$body" | grep -q '"message" *: *"Unauthorized"'; then
+    pass "$name ได้ 401 จาก Authorizer"
+  else
+    fail "$name ควรได้ 401 จาก Authorizer (ได้ $code: $body)"
+  fi
+}
 
 for path in /rates /claims /current-period /admin/claims; do
-  c=$(code_of "$API_URL$path")
-  [ "$c" = "401" ] && pass "ไม่มี token: GET $path ได้ 401" || fail "ไม่มี token: GET $path ควรได้ 401 (ได้ $c)"
+  authz_401 "ไม่มี token: GET $path" "$API_URL$path"
 done
-
-c=$(code_of -H "Authorization: Bearer not.a.real.token" "$API_URL/rates")
-[ "$c" = "401" ] && pass "token ปลอม ได้ 401" || fail "token ปลอม ควรได้ 401 (ได้ $c)"
+authz_401 "token ปลอม: GET /rates" -H "Authorization: Bearer not.a.real.token" "$API_URL/rates"
 
 # หน้าเว็บต้องอ่าน 401 ได้ (ไม่ใช่ CORS error) จึงต้องมี allow-origin แม้ถูกปฏิเสธ
 AO=$(curl -si --max-time 20 -H "Origin: $ORIGIN" "$API_URL/rates" | tr -d '\r' | grep -i '^access-control-allow-origin:' | cut -d: -f2- | sed 's/^ *//')
@@ -138,9 +149,9 @@ if [ "$RUN_ROUTES" = "1" ]; then
     if [ "$code" = "$expected" ]; then pass "$name (got $code)"; else fail "$name (expected $expected, got $code)"; fi
   }
 
-  check "GET /rates"                 200 "$API_URL/rates"
-  check "GET /terms"                 200 "$API_URL/terms"
-  UID_H="X-User-Id: $X_USER_ID"   # ส่งเฉพาะ route /claims
+  # Lambda ของ V2 ทุกตัว (รวม /rates, /terms) ตอบ 401 เมื่อไม่มี X-User-Id
+  check "GET /rates"                 200 -H "$UID_H" "$API_URL/rates"
+  check "GET /terms"                 200 -H "$UID_H" "$API_URL/terms"
   check "GET /claims"                200 -H "$UID_H" "$API_URL/claims?userId=u001&term=1-2569"
   check "GET /claims bad status"     400 -H "$UID_H" "$API_URL/claims?status=invalid"
   check "POST /claims"               201 -H "$UID_H" -X POST "$API_URL/claims" -H "$JSON" -d "$BODY"
