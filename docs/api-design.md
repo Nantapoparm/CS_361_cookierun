@@ -1,8 +1,12 @@
-# API Design (V2) — API Gateway
+# API Design (V2–V3) — API Gateway
 
 ไฟล์หลัก: [`backend/api/openapi.yaml`](../backend/api/openapi.yaml) (นำเข้า API Gateway แบบ HTTP API ได้)
 
 ## 1. API Contract
+
+> **V3:** ทุก Route ต้องส่ง `Authorization: Bearer <Cognito ID Token หรือ Access Token>` ถ้าไม่มีหรือไม่ถูกต้อง API Gateway ตอบ `401` เองโดยไม่เรียก Lambda
+
+### 1.1 Route ของ V2
 
 | Method | Route | หน้าที่ | ชื่อ Lambda (Prefix: `cookierun-`) | Status ที่คืน |
 |---|---|---|---|---|
@@ -14,6 +18,40 @@
 | GET | `/terms` | ภาคการศึกษาและรอบการเบิก | `cookierun-getTerms` | 200, 500 |
 | GET | `/rates` | อัตราค่าตอบแทน | `cookierun-getRates` | 200, 500 |
 | GET | `/uploads/presigned-url` | ขอ URL สำหรับอัปโหลดไฟล์หลักฐาน | `cookierun-getPresignedUrl` | 200, 500 |
+
+### 1.2 Route ของ V3 (ร่าง)
+
+ทุก Route ด้านล่างอาจคืน `401` (ไม่มี token) และ `500` เพิ่มจากที่ระบุ ส่วน `403` คือเข้าสู่ระบบแล้วแต่ไม่มีสิทธิ์
+
+| Method | Route | หน้าที่ | Lambda | Status ที่คืน |
+|---|---|---|---|---|---|
+| GET | `/schedule?month=YYYY-MM` | คาบของเดือน + สรุปคาบ/ชั่วโมงต่อวิชา | `cookierun-schedule` | 200, 400, 403 |
+| POST | `/schedule` | เพิ่มคาบสอนประจำ (`repeatWeekly`) | `cookierun-schedule` | 201, 400, 409 |
+| PUT | `/schedule/{id}` | แก้คาบสอนประจำ | `cookierun-schedule` | 200, 400, 404, 409 |
+| DELETE | `/schedule/{id}` | ลบคาบสอนประจำ | `cookierun-schedule` | 200, 404, 409 |
+| POST | `/schedule/exceptions` | เพิ่มคาบงดสอน / สอนชดเชย | `cookierun-schedule` | 201, 400, 409 |
+| PUT | `/schedule/exceptions/{id}` | แก้คาบงดสอน / สอนชดเชย | `cookierun-schedule` | 200, 400, 404, 409 |
+| DELETE | `/schedule/exceptions/{id}` | ลบคาบงดสอน / สอนชดเชย | `cookierun-schedule` | 200, 404, 409 |
+| GET | `/work-days?month=YYYY-MM` | วันทำงานของนักศึกษาช่วยงาน | `cookierun-workDays` | 200, 400 |
+| POST | `/work-days` | เพิ่มวันทำงาน | `cookierun-workDays` | 201, 400, 409 |
+| PUT | `/work-days/{id}` | แก้วันทำงาน | `cookierun-workDays` | 200, 400, 404, 409 |
+| DELETE | `/work-days/{id}` | ลบวันทำงาน | `cookierun-workDays` | 200, 404, 409 |
+| POST | `/work-days/clock` | ลงเวลาเข้า-ออกของวันนี้ | `cookierun-workDays` | 200, 400, 409 |
+| GET | `/current-period` | ภาค รอบการเบิก วันสิ้นสุด วันที่เหลือ | `cookierun-getCurrentPeriod` | 200 |
+| POST | `/claims/autofill` | สร้างร่างคำขอจากปฏิทิน (1 วิชา/เดือน) | `cookierun-autofillClaim` | 200 (ไม่มีคาบ), 201, 400, 403, 409 |
+| PUT | `/claims/{id}/print-method` | เปลี่ยนช่องทางยื่น | `cookierun-claimWorkflow` | 200, 400, 404, 409 |
+| GET | `/claims/{id}/actions` | ประวัติการดำเนินการของคำขอ | `cookierun-claimWorkflow` | 200, 404 |
+| GET | `/claims/{id}/pdf?type=claim\|makeup` | สร้าง PDF คืน Presigned URL | `cookierun-generatePdf` | 200, 403, 404, 409 |
+| GET | `/admin/claims?role=&status=&month=&offeringId=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ | `cookierun-admin` | 200, 403 |
+| GET | `/admin/claims/{id}` | รายละเอียดสำหรับตรวจ | `cookierun-admin` | 200, 403, 404 |
+| POST | `/admin/claims/{id}/review` | approve / reject / return | `cookierun-admin` | 200, 400, 403, 404, 409 |
+| POST | `/admin/claims/{id}/printed` | บันทึกว่าเจ้าหน้าที่พิมพ์แล้ว | `cookierun-admin` | 200, 403, 404, 409 |
+| POST | `/admin/claims/{id}/documents-received` | รับเอกสารที่เซ็นแล้ว | `cookierun-admin` | 200, 403, 404, 409 |
+| POST | `/admin/claims/send-to-finance` | ส่งการเงินเป็นชุด | `cookierun-admin` | 200, 400, 403, 409 |
+
+- Lambda ของ V3 รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย `event.routeKey` (เช่น `"DELETE /schedule/{id}"`)
+- `ClaimStatus` ของ V3: `draft`, `submitted`, `returned`, `approved`, `rejected`, `documents_received`, `sent_to_finance`
+- Route ที่ยังไม่มี Lambda จะตอบ `500` เมื่อส่ง token ที่ถูกต้อง และตอบ `401` เมื่อไม่มี token (Authorizer ทำงานก่อน Lambda)
 
 *(ตัวอย่าง Request/Response ของทุก Route สามารถดูได้ในไฟล์ `openapi.yaml` ฟิลด์ `example`)*
 
@@ -41,6 +79,8 @@
 |---|---|---|
 | 200 / 201 | สำเร็จ / สร้างสำเร็จ | - |
 | 400 | ข้อมูลที่ส่งมาไม่ถูกต้อง | `VALIDATION_ERROR` |
+| 401 | ไม่มี token / token ไม่ถูกต้องหรือหมดอายุ (API Gateway ตอบเอง body เป็น `{"message":"Unauthorized"}`) | - |
+| 403 | เข้าสู่ระบบแล้วแต่ไม่มีสิทธิ์ | `FORBIDDEN` |
 | 404 | ไม่พบข้อมูล | `NOT_FOUND` |
 | 409 | สถานะไม่อนุญาต (แก้หรือยื่นซ้ำหลังยื่นแล้ว) | `INVALID_STATE` |
 | 500 | ข้อผิดพลาดภายใน เช่น เชื่อมต่อ RDS ไม่ได้ | `INTERNAL_ERROR` |
@@ -76,6 +116,31 @@
 - **Decision:** อนุญาตเฉพาะ Origin `https://d2ye2fegyyx6ls.cloudfront.net` (Frontend ผ่าน CloudFront) และ `http://localhost:3000`, `:5500`, `:8000` สำหรับพัฒนา ไม่ใช้ `*` และไม่ใช้ S3 Website Endpoint เดิม เพราะ bucket ของ Frontend เป็น private และผู้ใช้เข้าผ่าน CloudFront เท่านั้น
 - **Headers:** `Content-Type` และ `Authorization` (เพิ่มไว้ล่วงหน้าสำหรับ V3 ที่ Login แล้วส่ง token ผ่าน header นี้)
 - **Trade-off:** การเพิ่ม `Authorization` ตั้งแต่ V2 ยังไม่มีผลใช้งานจริงและไม่เพิ่มความเสี่ยง แต่ทำให้ไม่ต้องแก้ CORS และ import ใหม่ตอน V3 ส่วน localhost ควรเอาออกก่อนส่ง V7 เพราะไม่ควรเปิดค้างบนระบบจริง
+- **V3:** เพิ่ม method `DELETE` (Route ปฏิทิน) ส่วน `X-User-Id` ยังคงไว้ชั่วคราวจนกว่า Lambda เลิกอ่าน และหน้าเว็บเลิกส่ง แล้วจึงลบออก
+- **CORS กับ 401:** API Gateway ใส่ header CORS ให้ทุก response รวมถึง `401` จาก Authorizer หน้าเว็บจึงอ่าน status `401` ได้ (ไม่กลายเป็น CORS error) และพากลับหน้า Login ได้ ส่วน preflight `OPTIONS` ไม่ผ่าน Authorizer เพราะ API Gateway ตอบเอง (ห้ามสร้าง route `OPTIONS` หรือ `$default` เอง ไม่เช่นนั้น preflight จะโดน 401)
+
+### 2.5 JWT Authorizer (Cognito) บน HTTP API เดิม (V3)
+
+- **Requirement:** ทุก Route ต้องเข้าสู่ระบบ และ Lambda ต้องรู้ว่าใครเรียกโดยเชื่อถือได้ (แทน `X-User-Id` ที่ปลอมได้)
+- **Decision:** เพิ่ม JWT Authorizer ชื่อ `cognitoJwt` บน HTTP API `39eee8bl4b` เดิม ผ่าน `securitySchemes` ใน `openapi.yaml` และผูกทุก operation ด้วย `security: [ { cognitoJwt: [] } ]`
+
+| ค่า | |
+|---|---|
+| Identity source | `$request.header.Authorization` (รูปแบบ `Bearer <token>`) |
+| Issuer | `https://cognito-idp.us-east-1.amazonaws.com/us-east-1_tGEzAfQt2` |
+| Audience | `5ikoqjohoavik8c91f3ph9qeck` (App Client ของหน้าเว็บ) |
+
+- API Gateway ตรวจลายเซ็น (JWKS ของ User Pool), `exp`, `iss` และ `aud` (ID Token) หรือ `client_id` (Access Token) จึงรับได้ทั้งสองแบบ
+- Lambda อ่านผู้เรียกจาก `event.requestContext.authorizer.jwt.claims` (`sub`, `cognito:groups`) แทน `X-User-Id`
+- **ไม่ได้ใช้ Authorizer ตรวจบทบาท:** JWT Authorizer ของ HTTP API ตรวจได้แค่ scope ไม่ใช่ `cognito:groups` Route `/admin/*` จึงต้องให้ Lambda ตรวจว่าเป็น `admin` แล้วตอบ `403`
+- **Trade-off:** ไม่ต้องเขียน Lambda Authorizer เอง ไม่มีค่าใช้จ่ายและ Latency เพิ่ม และ request ที่ไม่มี token ไม่ถึง Lambda/RDS เลย สิ่งที่แลกคือสิทธิ์ตามบทบาทยังต้องตรวจซ้ำในทุก Lambda
+- **ผลกระทบตอน deploy:** หลัง reimport หน้าเว็บ V2 ที่ยังไม่ส่ง token จะได้ `401` ทุก Route ทันที ต้อง deploy พร้อมกับหน้า Login หรือแจ้งทีมก่อน
+
+### 2.6 Lambda ของ V3 รวม Route ตามฟีเจอร์
+
+- **Requirement:** V3 เพิ่ม 23 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
+- **Decision:** Route ใหม่ใช้ Lambda 7 ฟังก์ชันตามฟีเจอร์ (`schedule`, `workDays`, `getCurrentPeriod`, `autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย `event.routeKey` ส่วน Route ของ V2 คง Lambda เดิม
+- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (7 แทน 23) สิ่งที่แลกคือสิทธิ์ IAM ของแต่ละ Lambda กว้างขึ้นเล็กน้อย (เช่น `cookierun-admin` ทั้งอ่านและเปลี่ยนสถานะ) และต้องเขียน routing ในโค้ด
 
 ## 3. Stage และ Access Log (V2)
 
@@ -116,6 +181,10 @@ Frontend (บน CloudFront) เรียก API Gateway โดยตรง ไ�
 | `protocol` | เวอร์ชัน HTTP |
 | `responseLength` | ขนาด response (ไบต์) |
 | `extendedRequestId` | รหัสคำขอแบบขยาย ใช้อ้างอิงกับฝ่ายสนับสนุนของ AWS |
+| `sub` | Cognito user id ของผู้เรียก จาก `$context.authorizer.claims.sub` ใช้ไล่ย้อนหลังว่าใครเรียก ว่างเมื่อถูกปฏิเสธด้วย 401 |
+| `authError` | สาเหตุที่ Authorizer ปฏิเสธ จาก `$context.authorizer.error` ว่างเมื่อผ่าน |
+
+`sub` เป็น UUID ที่ไม่ใช่ข้อมูลส่วนบุคคลโดยตรง จับคู่กับผู้ใช้ได้ผ่าน `user_information.cognitoSub` เท่านั้น จึงเพิ่มได้โดยไม่ขัดข้อกำหนดด้านล่าง ส่วน `email` และ token ยังห้ามลง Log
 
 ตัวอย่างบรรทัด Log (IP ถูกเบลอ):
 
@@ -173,7 +242,8 @@ API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/
 ```
 
 - ค่าเริ่มต้นทดสอบเฉพาะ CORS (ไม่ต้องมี Lambda) และ exit 0 เมื่อผ่านทั้งหมด
-- เพิ่ม `RUN_ROUTES=1` เพื่อทดสอบทุก route (ต้องผูก Lambda แล้ว)
+- เพิ่ม `RUN_ROUTES=1` เพื่อทดสอบทุก route (ต้องผูก Lambda แล้ว และ V3 ต้องตั้ง `TOKEN` ด้วย)
+- ทดสอบ Authorizer ทุกครั้ง: ไม่มี token / token ปลอมต้องได้ `401` และ `401` ต้องมี `access-control-allow-origin` ตั้ง `TOKEN` เพิ่มเพื่อทดสอบว่ามี token แล้วได้ `200` จาก Lambda
 - ปรับ origin ที่ทดสอบได้ด้วย `ORIGIN`, `LOCAL_ORIGIN`, `BAD_ORIGIN`
 - Origin ที่อนุญาต: `https://d2ye2fegyyx6ls.cloudfront.net` และ localhost 3000/5500/8000
 
@@ -189,8 +259,38 @@ API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh
 1. Reimport `backend/api/openapi.yaml` โดยแทน `ACCOUNT_ID` ด้วย Account ID จริง
 2. อ่านรายการ route → Lambda จาก API จริง แล้วให้สิทธิ์ `lambda:InvokeFunction` แยกตาม route (ข้ามถ้ามีอยู่แล้ว)
 3. ตรวจ Stage `$default`, Access Log และ CORS
+4. ตรวจว่ามี JWT Authorizer ที่ issuer ถูกต้อง และทุก route ผูก Authorizer นั้นแล้ว
 
 ข้อควรรู้
 - ต้องรันจากโฟลเดอร์ repo บน `main` ล่าสุด เพราะ reimport เขียนทับ CORS ทั้งก้อนด้วยค่าในไฟล์ (สคริปต์หยุดถ้าไม่พบ origin CloudFront)
 - ตั้ง `SKIP_IMPORT=1` เพื่อข้าม reimport และตรวจ/ให้สิทธิ์อย่างเดียว
 - รันซ้ำได้โดยไม่เกิดข้อผิดพลาด
+- Lambda ที่ยังไม่ deploy จะถูกข้ามและแจ้งเป็นหมายเหตุ (ไม่นับเป็นข้อผิดพลาด) เมื่อเพื่อน deploy Lambda ของ V3 แล้วให้รันซ้ำด้วย `SKIP_IMPORT=1` เพื่อให้สิทธิ์ API Gateway เรียก Lambda
+
+## 6. เปิดใช้ JWT Authorizer (V3)
+
+> หลังขั้นที่ 2 หน้าเว็บ V2 บน CloudFront จะได้ `401` ทุก Route จนกว่าหน้า Login (#75) จะ deploy ควรนัดเวลากับทีมก่อน
+
+รันใน AWS CloudShell (ต้องเปิด `ALLOW_USER_PASSWORD_AUTH` ใน App Client ก่อน จึงจะใช้ `get-token.sh` ได้)
+
+```bash
+# 1) Access Log รูปแบบใหม่ (เพิ่ม sub, authError) และดู Throttling เดิม
+API_ID=39eee8bl4b bash backend/api/scripts/setup-stage.sh
+
+# 2) Reimport openapi.yaml (สร้าง Authorizer + route V3) และตรวจว่าทุก route ผูก Authorizer
+API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh
+
+# 3) ทดสอบ
+export API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com
+TOKEN=$(bash backend/api/scripts/get-token.sh)
+TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
+
+# 4) หลักฐาน curl -i
+curl -i "$API_URL/rates"                                     # ไม่มี token → 401
+curl -i -H "Authorization: Bearer $TOKEN" "$API_URL/rates"   # มี token → 200 จาก Lambda
+
+# 5) Access Log ที่มี sub (รอสักครู่ให้ Log มาถึง)
+aws logs tail /aws/apigateway/cookierun-claim-api --since 10m --region us-east-1 | grep '"sub"'
+```
+
+ตรวจใน Console: API Gateway → `Teaching Compensation Claim API` → Authorization → แท็บ Manage authorizers (ค่า `cognitoJwt`) และแท็บ Attach authorizers to routes (ทุก route ต้องมี `JWT Auth`)
