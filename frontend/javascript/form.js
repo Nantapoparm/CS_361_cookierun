@@ -3,7 +3,8 @@
 // Input : GET /current-period, /rates, /claims, คาบของเดือน (GET /schedule หรือ /work-days) และ GET /claims/{id}
 // Output: บันทึกร่าง → POST /claims/autofill (ครั้งแรก) แล้ว PUT /claims/{id} { items } ด้วยคาบที่ติ๊ก
 //         ไม่มีคาบในปฏิทิน + "กรอกเอง" → POST /claims { offeringId, month, items }
-//         ดูตัวอย่าง PDF → submit.html?id= (ขั้นที่ 2) ; คำขอที่ถูกส่งกลับ → ยื่นอีกครั้ง POST /claims/{id}/submit
+//         ดูตัวอย่าง PDF → submit.html?preview=1 (ขั้นที่ 2) ไม่บันทึกลง DB — ส่งข้อมูลผ่าน sessionStorage (saveDraftPreview)
+//         คำขอจะถูกสร้าง (autofill) ตอนกดยืนยันยื่นในขั้นที่ 2 เท่านั้น ; คำขอที่ถูกส่งกลับ → ยื่นอีกครั้ง POST /claims/{id}/submit
 // ภาคการศึกษา รอบการเบิก และวันที่ยื่น server กำหนดเอง (V3-06) หน้าเว็บแสดงอย่างเดียว
 
 let user, period, rates = [], claims = [];
@@ -82,11 +83,21 @@ function openClaim(c) {
   claim = c;
   manual = false;
   const have = new Set(c.items.map(keyOf));
-  rows = [
+  rows = restoreRows() || [
     ...c.items.map((x) => ({ ...x, key: keyOf(x), checked: true })),
     ...(tabs[cur]?.source || []).filter((x) => !have.has(keyOf(x))).map((x) => ({ ...x, key: keyOf(x), checked: false }))
   ].sort((a, b) => a.key.localeCompare(b.key));
   render();
+}
+
+// แถวที่แก้ไว้ก่อนกด "ดูตัวอย่าง PDF" (ยังไม่บันทึก) ของคำขอ / วิชา + เดือนเดียวกัน
+function restoreRows() {
+  const d = loadDraftPreview();
+  if (!d?.rows?.length) return null;
+  const same = claim ? d.claimId === claim.claimId : !d.claimId && d.month === month && String(d.offeringId) === String(tabs[cur]?.course?.offeringId);
+  if (!same) return null;
+  manual = !!d.manual;
+  return d.rows;
 }
 
 async function selectTab(i) {
@@ -101,7 +112,7 @@ async function selectTab(i) {
     try { openClaim(await api.getClaim(t.listed.claimId)); } catch (err) { showError(err, $('msg'), () => selectTab(i)); }
     return;
   }
-  rows = t.source.map((x) => ({ ...x, key: keyOf(x), checked: true }));
+  rows = restoreRows() || t.source.map((x) => ({ ...x, key: keyOf(x), checked: true }));
   if (!rows.length) { renderEmpty(); return; }
   render();
 }
@@ -293,9 +304,18 @@ function bind() {
 
 function bindSide() {
   $('btnSave')?.addEventListener('click', async () => { if (await save()) toast(`บันทึกร่าง #${claim.claimId} แล้ว`); });
-  $('btnPreview')?.addEventListener('click', async () => {
+  $('btnPreview')?.addEventListener('click', () => {
     if (!checkedRows().length) { toast('กรุณาเลือกอย่างน้อย 1 รายการ', true); return; }
-    if (await save()) location.href = `submit.html?id=${encodeURIComponent(claim.claimId)}`;
+    clearTimeout(saveTimer);
+    const c = tabs[cur]?.course || claim;
+    const { weekdays, ...course } = c;
+    const ok = saveDraftPreview({
+      claimId: claim?.claimId || null, offeringId: c.offeringId, month, manual,
+      hasSource: !!tabs[cur]?.source.length, course, rows
+    });
+    // เบราว์เซอร์ไม่ให้ใช้ sessionStorage (เช่น private mode) → บันทึกร่างแล้วเปิดแบบเดิม
+    if (ok) location.href = 'submit.html?preview=1';
+    else save().then((done) => { if (done) location.href = `submit.html?id=${encodeURIComponent(claim.claimId)}`; });
   });
   $('btnResubmit')?.addEventListener('click', resubmit);
 }
@@ -338,6 +358,7 @@ async function save(silent = false) {
       }
       $('saved').textContent = `บันทึกร่างอัตโนมัติ ${pad2(new Date().getHours())}:${pad2(new Date().getMinutes())} น.`;
       $('msg').innerHTML = '';
+      clearDraftPreview();
       return true;
     } catch (err) {
       $('saved').textContent = 'บันทึกไม่สำเร็จ';

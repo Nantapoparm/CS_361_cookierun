@@ -1,11 +1,16 @@
 // submit.js — สร้างคำขอ ขั้นที่ 2 ตรวจตัวอย่าง PDF + เลือกช่องทางยื่น (Figma I5 · T4 · I7 ยืนยัน · ST6 PDF error)
 //             และขั้นที่ 3 ยื่นสำเร็จ (I6 ปริ้นเซ็นเอง · I8 เซ็นกับเจ้าหน้าที่ · T5)
-// เปิดเป็น submit.html?id=<claimId> ; หลังยื่นแล้ว = submit.html?id=<claimId>&done=1
-// Input : GET /claims/{id}, GET /claims/{id}/pdf?type=claim|blank, GET /claims (เพดานรวมของ TA), GET /rates
-// Output: POST /claims/{id}/submit { printMethod: 'sign_with_staff' | 'self_print' }
+// เปิดได้ 2 แบบ:
+//   submit.html?preview=1   = จากปุ่ม "ดูตัวอย่าง PDF" ในขั้นที่ 1 — ข้อมูลยังไม่ถูกบันทึก (อ่านจาก sessionStorage: loadDraftPreview)
+//                             ตัวอย่างวาดจากข้อมูลในฟอร์ม ดูซ้ำได้เรื่อยๆ ; บันทึกลง DB ตอนกดยืนยันยื่นเท่านั้น
+//   submit.html?id=<claimId> = ร่างที่บันทึกแล้ว (เช่น จากหน้ารายละเอียด) ; หลังยื่นแล้ว = &done=1
+// Input : GET /claims/{id}, GET /claims/{id}/pdf?type=claim|blank (ถ้าไม่ได้ เช่น 409 ร่างยังดาวน์โหลดไม่ได้ → ใช้ตัวอย่างที่วาดเอง),
+//         GET /claims (เพดานรวมของ TA), GET /rates
+// Output: ยืนยันยื่น → (ยังไม่มีคำขอ) POST /claims/autofill หรือ POST /claims → PUT /claims/{id} { items } → POST /claims/{id}/submit { printMethod }
 //         เปลี่ยนใจจากปริ้นเองเป็นเซ็นที่เคาน์เตอร์: PUT /claims/{id}/print-method
 
 let user, claim, claims = [], rates = [], pdf = null;
+let draft = null;   // ข้อมูลจากขั้นที่ 1 ที่ยังไม่บันทึก (โหมด preview)
 let method = 'sign_with_staff';
 const student = () => user.role === 'student_helper';
 const docType = () => (student() ? 'blank' : 'claim');
@@ -52,7 +57,7 @@ function choiceHtml(pm, icon, title, desc, rec) {
 function renderPreview() {
   $('title').textContent = 'ตัวอย่างเอกสาร PDF';
   $('lead').textContent = student() ? 'แบบฟอร์มของนักศึกษาช่วยงานเป็นแบบฟอร์มเปล่า กรอกด้วยลายมือ' : 'ตรวจข้อมูลบนแบบฟอร์มจริงก่อนเลือกช่องทางยื่น';
-  $('tools').innerHTML = `<a class="btn ghost" href="form.html?id=${encodeURIComponent(claim.claimId)}">← กลับไปแก้ไข</a>`;
+  $('tools').innerHTML = `<a class="btn ghost" href="${esc(backToForm())}">← กลับไปแก้ไข</a>`;
   $('steps').innerHTML = steps3Html(2);
   $('body').innerHTML = `<div class="preview-layout">
       <div id="doc"><div class="pdf-frame"><div class="paper loading">${skeleton(['w60', '', 'w80', 'lg', 'lg', 'lg'])}</div></div></div>
@@ -84,20 +89,51 @@ function pick(pm) {
   document.querySelectorAll('[data-go]').forEach((b) => b.classList.toggle('ghost', b.dataset.go !== pm));
 }
 
+// ตัวอย่างวาดจากข้อมูลคำขอที่หน้าเว็บ ; ถ้าเป็นร่างที่บันทึกแล้วลองขอ PDF จริงก่อน (Lambda อาจตอบ 409 เพราะยังไม่ตรวจผ่าน → ใช้ตัวอย่างที่วาดเอง)
 async function loadPdf() {
   $('doc').innerHTML = `<div class="pdf-frame"><div class="paper loading">${skeleton(['w60', '', 'w80', 'lg', 'lg', 'lg'])}<p class="loading-text">กำลังสร้างตัวอย่าง PDF…</p></div></div>`;
-  document.querySelectorAll('[data-go]').forEach((b) => { b.disabled = true; });
-  try {
-    pdf = await api.getPdf(claim.claimId, docType());
-    $('doc').innerHTML = pdfFrameHtml(fileName(), docHtml(), pdf?.downloadUrl);
-    document.querySelectorAll('[data-go]').forEach((b) => { b.disabled = false; });
-    $('pdfHint').hidden = true;
-  } catch (err) {
-    console.error(err);
-    $('doc').innerHTML = pdfErrorHtml('pdfRetry');
-    $('pdfRetry').addEventListener('click', loadPdf);
-    $('pdfHint').hidden = false;
+  pdf = null;
+  if (claim.claimId && !draft) {
+    try { pdf = await api.getPdf(claim.claimId, docType()); } catch (err) { console.warn('ใช้ตัวอย่างที่วาดเองแทน PDF จาก Lambda', err); }
   }
+  $('doc').innerHTML = pdfFrameHtml(fileName(), docHtml(), pdf?.downloadUrl);
+  document.querySelectorAll('[data-go]').forEach((b) => { b.disabled = false; });
+  $('pdfHint').hidden = true;
+}
+
+const backToForm = () => (claim.claimId ? `form.html?id=${encodeURIComponent(claim.claimId)}`
+  : `form.html?month=${encodeURIComponent(claim.month)}${claim.offeringId != null ? `&offeringId=${encodeURIComponent(claim.offeringId)}` : ''}`);
+
+// โหมด preview: สร้างข้อมูลคำขอจากฟอร์ม (ยังไม่มีใน DB) — ยอดรวมคำนวณแบบเดียวกับขั้นที่ 1
+function claimFromDraft(d) {
+  const items = d.rows.filter((r) => r.checked).map(({ key, checked, ...x }) => x);
+  const r = rateOf(rates, user.role);
+  const totalHours = sumHours(items);
+  const totalAmount = student()
+    ? items.reduce((s, x) => s + Math.min(x.hours * (r.ratePerHour || 0), r.maxAmountPerDay || Infinity), 0)
+    : Math.round(totalHours * (r.ratePerHour || 0) * 100) / 100;
+  const t = termOfDate(parseMonth(d.month)), per = periodFromDate();
+  return {
+    ...d.course, claimId: d.claimId || null, status: 'draft', printMethod: null, role: user.role,
+    offeringId: d.offeringId, month: d.month, ...t, term: `${t.semester}-${be(t.academicYear)}`,
+    cycle: per.cycle, deadline: per.deadline, items, totalHours, totalAmount, ratePerHour: r.ratePerHour
+  };
+}
+
+// บันทึกคำขอลง DB ครั้งเดียวตอนยืนยันยื่น แล้วคืน claimId
+async function persistDraft() {
+  const body = { items: claim.items.map((x) => ({ ...(x.workId ? { workId: x.workId } : {}), workDate: x.workDate, startTime: x.startTime, endTime: x.endTime, hours: x.hours, Remark: (x.Remark || '').trim(), kind: x.kind })) };
+  if (claim.claimId) { await api.updateClaim(claim.claimId, body); return claim.claimId; }
+  const direct = draft.manual || !draft.hasSource;
+  const created = direct
+    ? await api.createClaim({ offeringId: draft.offeringId, month: draft.month, ...body })
+    : await api.autofillClaim(draft.offeringId, draft.month);
+  if (!created?.claimId) throw new ApiError('VALIDATION_ERROR', `เดือน ${thMonth(draft.month)} ไม่มีคาบในปฏิทิน`, 400);
+  // จำ claimId ไว้ ถ้าขั้นต่อไปล้มแล้วกดยื่นใหม่ จะได้แก้ใบเดิม ไม่สร้างซ้ำ (autofill ตอบ 409 ถ้าซ้ำ)
+  claim.claimId = created.claimId;
+  saveDraftPreview({ ...draft, claimId: created.claimId });
+  if (!direct) await api.updateClaim(created.claimId, body);
+  return created.claimId;
 }
 
 // I7 — ยืนยันการยื่น (ต้องติ๊กรับรองข้อมูล)
@@ -119,10 +155,15 @@ async function confirmSubmit() {
       return false;
     },
     onOk: async () => {
-      try { claim = await api.submitClaim(claim.claimId, method); } catch (err) { throw new Error(errorText(err)); }
+      try {
+        const id = draft ? await persistDraft() : claim.claimId;
+        claim = await api.submitClaim(id, method);
+        clearDraftPreview();
+      } catch (err) { throw new Error(errorText(err)); }
     }
   });
   if (ok) {
+    draft = null;
     history.replaceState(null, '', `submit.html?id=${encodeURIComponent(claim.claimId)}&done=1`);
     renderDone();
     window.scrollTo(0, 0);
@@ -201,6 +242,15 @@ async function init() {
   const q = new URLSearchParams(location.search);
   $('body').innerHTML = `<div class="card">${skeleton(['w40', '', 'lg', 'lg'])}</div>`;
   try {
+    if (q.get('preview')) {
+      draft = loadDraftPreview();
+      if (!draft?.rows?.length) { location.replace('form.html'); return; }
+      [claims, rates] = await Promise.all([api.getClaims().catch(() => []), api.getRates()]);
+      claim = claimFromDraft(draft);
+      method = 'sign_with_staff';
+      renderPreview();
+      return;
+    }
     [claim, claims, rates] = await Promise.all([api.getClaim(q.get('id') || ''), api.getClaims(), api.getRates()]);
     if (q.get('done') && !EDITABLE.includes(claim.status)) { renderDone(); return; }
     if (!EDITABLE.includes(claim.status)) { location.replace(`detail.html?id=${encodeURIComponent(claim.claimId)}`); return; }
