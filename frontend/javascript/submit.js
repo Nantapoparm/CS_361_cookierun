@@ -6,7 +6,7 @@
 //   submit.html?id=<claimId> = ร่างที่บันทึกแล้ว (เช่น จากหน้ารายละเอียด) ; หลังยื่นแล้ว = &done=1
 // Input : GET /claims/{id}, GET /claims/{id}/pdf?type=claim|blank (ถ้าไม่ได้ เช่น 409 ร่างยังดาวน์โหลดไม่ได้ → ใช้ตัวอย่างที่วาดเอง),
 //         GET /claims (เพดานรวมของ TA), GET /rates
-// Output: ยืนยันยื่น → (ยังไม่มีคำขอ) POST /claims/autofill หรือ POST /claims → PUT /claims/{id} { items } → POST /claims/{id}/submit { printMethod }
+// Output: ยืนยันยื่น → (ยังไม่มีคำขอ) POST /claims { offeringId, month, items } หรือ (มีร่างแล้ว) PUT /claims/{id} { items } → POST /claims/{id}/submit { printMethod }
 //         เปลี่ยนใจจากปริ้นเองเป็นเซ็นที่เคาน์เตอร์: PUT /claims/{id}/print-method
 
 let user, claim, claims = [], rates = [], pdf = null;
@@ -124,15 +124,10 @@ function claimFromDraft(d) {
 async function persistDraft() {
   const body = { items: claim.items.map((x) => ({ ...(x.workId ? { workId: x.workId } : {}), workDate: x.workDate, startTime: x.startTime, endTime: x.endTime, hours: x.hours, Remark: (x.Remark || '').trim(), kind: x.kind })) };
   if (claim.claimId) { await api.updateClaim(claim.claimId, body); return claim.claimId; }
-  const direct = draft.manual || !draft.hasSource;
-  const created = direct
-    ? await api.createClaim({ offeringId: draft.offeringId, month: draft.month, ...body })
-    : await api.autofillClaim(draft.offeringId, draft.month);
-  if (!created?.claimId) throw new ApiError('VALIDATION_ERROR', `เดือน ${thMonth(draft.month)} ไม่มีคาบในปฏิทิน`, 400);
-  // จำ claimId ไว้ ถ้าขั้นต่อไปล้มแล้วกดยื่นใหม่ จะได้แก้ใบเดิม ไม่สร้างซ้ำ (autofill ตอบ 409 ถ้าซ้ำ)
+  const created = await api.createClaim({ offeringId: draft.offeringId, month: draft.month, ...body });
+  // จำ claimId ไว้ ถ้าขั้นยื่นล้มแล้วกดยื่นใหม่ จะได้ใช้ใบเดิม ไม่สร้างซ้ำ (POST /claims ตอบ 409 ถ้าซ้ำ)
   claim.claimId = created.claimId;
   saveDraftPreview({ ...draft, claimId: created.claimId });
-  if (!direct) await api.updateClaim(created.claimId, body);
   return created.claimId;
 }
 

@@ -1,10 +1,10 @@
 // form.js — สร้างคำขอ ขั้นที่ 1 ข้อมูลคำขอ (Figma I4 อาจารย์ · T3 TA 1 ใบต่อวิชา · I13 แก้ไขคำขอที่ถูกส่งกลับ · ST3 ไม่มีข้อมูลในปฏิทิน)
 // เปิดได้ 2 แบบ: form.html?month=YYYY-MM[&offeringId=] = คำขอใหม่จากปฏิทิน ; form.html?id=<claimId> = แก้ร่าง / คำขอที่ถูกส่งกลับ
 // Input : GET /current-period, /rates, /claims, คาบของเดือน (GET /schedule หรือ /work-days) และ GET /claims/{id}
-// Output: บันทึกร่าง → POST /claims/autofill (ครั้งแรก) แล้ว PUT /claims/{id} { items } ด้วยคาบที่ติ๊ก
-//         ไม่มีคาบในปฏิทิน + "กรอกเอง" → POST /claims { offeringId, month, items }
+// Output: บันทึกร่าง → POST /claims { offeringId, month, items } (ครั้งแรก) แล้ว PUT /claims/{id} { items } ด้วยคาบที่ติ๊ก
+//         (POST /claims/autofill อ่านอย่างเดียว ไม่บันทึก — ไม่ได้ใช้ตอนบันทึก)
 //         ดูตัวอย่าง PDF → submit.html?preview=1 (ขั้นที่ 2) ไม่บันทึกลง DB — ส่งข้อมูลผ่าน sessionStorage (saveDraftPreview)
-//         คำขอจะถูกสร้าง (autofill) ตอนกดยืนยันยื่นในขั้นที่ 2 เท่านั้น ; คำขอที่ถูกส่งกลับ → ยื่นอีกครั้ง POST /claims/{id}/submit
+//         คำขอจะถูกสร้าง (POST /claims) ตอนกดยืนยันยื่นในขั้นที่ 2 เท่านั้น ; คำขอที่ถูกส่งกลับ → ยื่นอีกครั้ง POST /claims/{id}/submit
 // ภาคการศึกษา รอบการเบิก และวันที่ยื่น server กำหนดเอง (V3-06) หน้าเว็บแสดงอย่างเดียว
 
 let user, period, rates = [], claims = [];
@@ -338,12 +338,8 @@ async function save(silent = false) {
   saving = (async () => {
     try {
       if (!claim) {
-        // ครั้งแรก: สร้างร่างจากปฏิทิน (หรือกรอกเอง) แล้วบันทึกคาบที่ติ๊ก
-        let created = manual || !tabs[cur].source.length
-          ? await api.createClaim({ offeringId: c.offeringId, month, ...itemsBody() })
-          : await api.autofillClaim(c.offeringId, month);
-        if (!created?.claimId) throw new ApiError('VALIDATION_ERROR', `เดือน ${thMonth(month)} ไม่มีคาบในปฏิทิน`, 400);
-        if (!manual) created = await api.updateClaim(created.claimId, itemsBody());
+        // ครั้งแรก: สร้างร่างพร้อมคาบที่ติ๊ก (ทั้งจากปฏิทินและกรอกเอง) ในครั้งเดียว
+        const created = await api.createClaim({ offeringId: c.offeringId, month, ...itemsBody() });
         claim = created;
         tabs[cur].listed = created;
         history.replaceState(null, '', `form.html?id=${encodeURIComponent(created.claimId)}`);
