@@ -1,0 +1,98 @@
+/* admin.css — หน้าเจ้าหน้าที่ V3 (AD1 ภาพรวม · AD2 คำขอทั้งหมด · AD3/AD4 ตรวจคำขอ · AD5–AD7 เคาน์เตอร์)
+   ใช้ตัวแปรจาก base.css และ Component จาก ui.css / user.css */
+
+/* ---------- ส่วนที่ใช้ร่วมกัน ---------- */
+
+.tag.role { font-size: 11px; }
+.admin-list td.who { font-weight: 600; }
+.admin-list td.st small, .admin-list td.st .chip + small { display: block; margin-top: 3px; font-size: 11.5px; color: var(--ink-faint); }
+.btn.danger-solid { background: #b42318; border-color: #b42318; color: #fff; }
+.btn.danger-solid:hover { background: #912018; border-color: #912018; }
+.req { color: var(--danger); }
+
+/* ---------- AD1 ภาพรวม ---------- */
+
+.admin-top { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(0, 1fr)); gap: 18px; }
+.admin-top > .period { min-height: 190px; }
+a.stat { display: block; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+a.stat:hover { border-color: var(--ink-faint); }
+a.stat:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 2px; }
+.stat.blue b { color: var(--st-sub); }
+.stat.red b { color: var(--st-ret); }
+.stat.brown b { color: var(--st-sign); }
+.stat.green b { color: var(--st-done); }
+.admin-mid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.admin-side { display: grid; gap: 16px; }
+.role-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.role-list small { display: block; font-size: 12px; color: var(--ink-muted); }
+.role-list span { font-size: 13px; color: var(--ink-muted); white-space: nowrap; }
+.role-list span b { font-size: 18px; color: var(--ink); }
+
+/* ---------- AD3 ตรวจคำขอ ---------- */
+
+.review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+.review-main { min-width: 0; }
+.checks { display: grid; gap: 10px; }
+.checks li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; }
+.checks .mk { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; }
+.checks .ok .mk { background: var(--st-done-bg); color: var(--st-done); }
+.checks .warn .mk { background: var(--gold-soft); color: var(--st-sign); border: 1px solid var(--gold-line); }
+.checks .bad .mk { background: var(--st-ret-bg); color: var(--st-ret); }
+.checks + .muted { margin-top: 12px; }
+.note-box { width: 100%; min-height: 86px; padding: 10px 12px; font-family: inherit; font-size: 14px; border: 1px solid #d0d5dd; border-radius: var(--radius-sm); resize: vertical; }
+.note-box:focus-visible { outline: 2px solid var(--gold-strong); outline-offset: 1px; }
+.review-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.danger-link { display: block; margin: 14px auto 0; color: var(--danger); }
+.match { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.match.ok { background: var(--st-done-bg); color: var(--st-done); }
+.match.warn { background: var(--gold-soft); color: var(--st-sign); }
+.match.bad { background: var(--st-ret-bg); color: var(--st-ret); }
+.dtable tr.warnrow td { background: #fffdf3; }
+.timeline small { display: block; color: var(--ink-muted); font-size: 12.5px; }
+
+/* AD4 เลือกแถวที่ต้องแก้ */
+.picks { display: grid; gap: 8px; }
+.pick { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; }
+.pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink-900); }
+.pick:has(input:checked) { background: var(--danger-soft); border-color: var(--danger-line); }
+.pick.sus { border-style: dashed; }
+.modal textarea { width: 100%; padding: 10px 12px; font-family: inherit; font-size: 14px; border: 1px solid #d0d5dd; border-radius: var(--radius-sm); resize: vertical; }
+
+/* ---------- AD5 / AD7 เคาน์เตอร์ ---------- */
+
+.tabs-lg button { padding: 8px 16px; font-size: 14px; }
+.tabs-lg button[aria-selected="true"] { background: var(--ink-900); color: #fff; }
+.dtable.counter .ck { width: 48px; }
+.dtable.counter .ck input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink-900); vertical-align: middle; cursor: pointer; }
+.dtable.counter .ck input:disabled { cursor: default; }
+.dtable.counter tr.got td { background: #fffdf0; }
+.finance-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px;
+  padding: 16px 20px; border-radius: var(--radius); background: var(--ink-900); color: rgba(255, 255, 255, .85); font-size: 14.5px;
+}
+.finance-bar b { color: var(--gold); font-size: 16px; }
+.finance-bar:empty { display: none; }
+
+/* AD6 รายการส่งการเงิน */
+.fin-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fin-list li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.fin-list li:first-child { border-top: 0; }
+.fin-list small { color: var(--ink-muted); }
+.fin-list li.sum { background: var(--line-soft); font-weight: 700; }
+
+/* พิมพ์หลายใบ: ใบละหน้า */
+.doc-page + .doc-page { break-before: page; margin-top: 40px; }
+
+@media (max-width: 1100px) {
+  .admin-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-top > .period { grid-column: 1 / -1; min-height: 0; }
+  .admin-mid, .review-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .admin-top { gap: 12px; }
+  .stat b { font-size: 24px; }
+  .review-btns { grid-template-columns: 1fr; }
+  .finance-bar .btn { width: 100%; }
+  .dtable.counter td.ck { justify-content: flex-start; }
+  .dtable.counter td.ck::before { content: none; }
+}

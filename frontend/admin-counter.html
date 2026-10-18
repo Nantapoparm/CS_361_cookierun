@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เคาน์เตอร์เซ็นเอกสาร | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/user.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="app">
+  <header class="topbar" data-mount="topbar"></header>
+  <main class="main"><div class="content">
+
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">เจ้าหน้าที่</div>
+        <h1>เคาน์เตอร์เซ็นเอกสาร</h1>
+        <p class="lead" id="lead"></p>
+      </div>
+      <div class="tools"><button type="button" class="btn ghost" id="btnPrintAll" hidden>พิมพ์ทั้งหมดที่ยังไม่พิมพ์</button></div>
+    </div>
+
+    <div class="counts tabs-lg" id="tabs" role="tablist" aria-label="ประเภทเอกสาร">
+      <button type="button" role="tab" data-tab="sign" aria-selected="true">รอเซ็นที่เคาน์เตอร์</button>
+      <button type="button" role="tab" data-tab="self" aria-selected="false">รับเอกสารที่ปริ้นเอง</button>
+    </div>
+    <div id="hint"></div>
+    <div class="filters section-gap">
+      <input type="search" id="fSearch" placeholder="ค้นหาชื่อผู้ขอ / เลขที่คำขอ…" aria-label="ค้นหาชื่อผู้ขอหรือเลขที่คำขอ">
+      <select id="fRole" aria-label="บทบาท">
+        <option value="">ทุกบทบาท</option>
+        <option value="instructor">อาจารย์</option>
+        <option value="ta">TA</option>
+        <option value="student_helper">นักศึกษาช่วยงาน</option>
+      </select>
+    </div>
+
+    <div id="msg"></div>
+    <div class="table-card" id="tableCard">
+      <table class="dtable admin-list counter">
+        <thead><tr><th class="ck"><span class="sr" id="ckHead">เซ็นแล้ว</span></th><th>เลขที่</th><th>บทบาท</th><th>ผู้ขอ</th><th>รายการ</th><th class="num">บาท</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="finance-bar section-gap" id="bar"></div>
+  </div></main>
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/ui.js"></script>
+  <script src="javascript/config.js"></script>
+  <script src="javascript/auth.js"></script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/pdf.js"></script>
+  <script src="javascript/admin-ui.js"></script>
+  <script src="javascript/admin-counter.js"></script>
+</body>
+</html>
