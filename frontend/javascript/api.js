@@ -1,43 +1,73 @@
-// api.js — สลับ mock / API จริงได้ที่ API_CONFIG.USE_MOCK + ตัวช่วยที่ทุกหน้า V2 ใช้ร่วมกัน
-// รูปแบบข้อมูล/error ตาม openapi.yaml (Teaching Compensation Claim API v2.0.0) ต้องโหลดหลัง core.js และ layout.js
-// ข้อมูลเก็บใน localStorage (key: mockClaimsV4) เพื่อให้ข้ามหน้าได้ — ล้างข้อมูลทดสอบ: localStorage.removeItem('mockClaimsV4')
+// api.js — สลับ mock / API จริงได้ที่ API_CONFIG.USE_MOCK + ตัวช่วยที่ทุกหน้าใช้ร่วมกัน
+// รูปแบบข้อมูล/error ตาม openapi.yaml ต้องโหลดหลัง core.js, layout.js, ui.js, config.js และ auth.js
+// ข้อมูล mock เก็บใน localStorage (key: mockClaimsV5) เพื่อให้ข้ามหน้าได้ — ล้างข้อมูลทดสอบ: localStorage.removeItem('mockClaimsV5')
 // ทุกหน้าเรียกผ่านออบเจกต์ `api` เท่านั้น สลับโหมดที่ API_CONFIG.USE_MOCK (true = mock, false = API จริง) แล้วตั้ง API_CONFIG.BASE_URL
-
-// ชั่วคราว: ยังไม่มี login → สลับผู้ใช้ทดสอบได้จาก dropdown บนแถบด้านบน (renderUserSwitch)
-// role ต้องตรงกับ user_information.roleId ของ userId นั้นใน DB (backend คิดเงินตามค่าใน DB)
-// เพิ่มผู้ใช้ทดสอบ = เพิ่มแถวใน DB แล้วเพิ่มรายการที่นี่
-const TEST_USERS = [
-  { userId: '1', name: 'สมชาย', lastName: 'ใจดี', role: 'instructor' },
-  { userId: '2', name: 'สมหมาย', lastName: 'ใจกว้าง', role: 'ta' },
-  { userId: '3', name: 'สมหญิง', lastName: 'ใจแคบ', role: 'student_helper' }
-];
-const USER_KEY = 'userId';
-const savedUserId = () => { try { return localStorage.getItem(USER_KEY); } catch { return null; } };
+//
+// ผู้ใช้มาจาก Auth (auth.js ของคนที่ 1 — V3-02) ทุก request แนบ Authorization: Bearer <token>
+// Lambda อ่านผู้ใช้จาก token เอง (V3-07) หน้าเว็บจึงไม่ส่ง userId
 
 const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
   USE_MOCK: false,
-  BASE_URL: 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com', // ใส่ URL ของ API Gateway จริง (ไม่ต้องมี / ท้าย)
-  // ผู้ใช้ปัจจุบัน = คนที่เลือกไว้ (จำใน localStorage) ไม่งั้นคนแรกในรายการ
-  USER: { ...(TEST_USERS.find((u) => u.userId === savedUserId()) || TEST_USERS[0]), halfLoad: true }
+  // URL ของ API Gateway (ไม่มี / ท้าย) อ่านจาก config.js ของคนที่ 1 ก่อน
+  BASE_URL: window.APP_CONFIG?.apiBaseUrl || 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com'
 };
+
+// หน้าแรกของแต่ละบทบาทหลังเข้าสู่ระบบ — V3-14 เปลี่ยนผู้ขอเบิกเป็น home.html
+const ROLE_HOME = { instructor: 'dashboard.html', ta: 'dashboard.html', student_helper: 'dashboard.html', admin: 'admin.html' };
+// บทบาทที่เปิดหน้าแต่ละกลุ่มได้ (ส่งให้ initPage)
+const REQUESTERS = ['instructor', 'ta', 'student_helper'];
+const STAFF = ['admin'];
 
 class ApiError extends Error {
   constructor(code, message, status) { super(message); this.code = code; this.status = status; }
 }
 
+/* ---------- ผู้ใช้ที่เข้าสู่ระบบ ---------- */
+
+const hasAuth = () => typeof Auth !== 'undefined';
+// รองรับทั้งฟังก์ชันแบบ sync และ async ของ auth.js
+const authCall = async (fn, ...args) => (hasAuth() && typeof Auth[fn] === 'function' ? Auth[fn](...args) : null);
+
+// { name, lastName, role, sub? } ; ไม่มี getUser() ใน auth.js → ใช้บทบาทจาก getUserRole() อย่างเดียว
+async function currentUser() {
+  const u = await authCall('getUser');
+  if (u) return u;
+  const role = await authCall('getUserRole');
+  return role ? { name: '', lastName: '', role } : null;
+}
+
+// ส่งไปหน้า login พร้อมจำหน้าที่จะกลับมา (?next=)
+function goLogin() {
+  const here = location.pathname.split('/').pop() + location.search;
+  location.replace(`login.html?next=${encodeURIComponent(here)}`);
+}
+
+async function logoutAndLogin() {
+  try { await authCall('logout'); } catch { /* ลบ token ไม่ได้ก็ยังพาไปหน้า login */ }
+  goLogin();
+}
+
 // จุดเดียวที่หน้าเว็บคุยกับข้อมูล — เลือก mock หรือ API จริงตาม API_CONFIG.USE_MOCK
 async function request(method, path, body) {
-  return API_CONFIG.USE_MOCK ? mockRequest(method, path, body) : realRequest(method, path, body);
+  if (!API_CONFIG.USE_MOCK) return realRequest(method, path, body);
+  try { return await mockRequest(method, path, body); } catch (e) {
+    if (e.status === 401) await logoutAndLogin();
+    throw e;
+  }
 }
 
 // API จริง: response สำเร็จ = { success:true, data } ; ผิดพลาด = { success:false, error:{ code, message } }
+// ไม่มี token หรือได้ 401 (token หมดอายุ / ไม่ถูกต้อง) → ออกจากระบบแล้วไปหน้า login
 async function realRequest(method, path, body) {
-  const headers = { 'X-User-Id': API_CONFIG.USER.userId };
+  let token = null;
+  try { token = await authCall('getToken'); } catch { /* ต่ออายุไม่ได้ = ถือว่าไม่มี token */ }
+  if (!token) { await logoutAndLogin(); throw new ApiError('UNAUTHORIZED', 'กรุณาเข้าสู่ระบบ', 401); }
+
+  const headers = { Authorization: `Bearer ${token}` };
   if (body) headers['Content-Type'] = 'application/json';
-  
+
   let res;
-  
   try {
     res = await fetch(API_CONFIG.BASE_URL + path, {
       method,
@@ -47,6 +77,7 @@ async function realRequest(method, path, body) {
   } catch {
     throw new ApiError('NETWORK_ERROR', 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 0);
   }
+  if (res.status === 401) { await logoutAndLogin(); throw new ApiError('UNAUTHORIZED', 'กรุณาเข้าสู่ระบบใหม่', 401); }
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.success) {
     const e = json?.error || {};
@@ -83,13 +114,14 @@ const normTerms = (list) => {
    claim = { id, userId, role, term:'1-2569', billingCycle:1|2,
              items:[{date, courseCode?, hours, note?}], attachments:[fileKey],
              status:'draft'|'submitted', totalHours, totalAmount, createdAt, updatedAt, submittedAt|null }
-   body ของ POST/PUT = { userId, role, term, billingCycle, items:[{date, courseCode?, hours, note?}], attachments?:[fileKey] }
+   body ของ POST/PUT = { role, term, billingCycle, items:[{date, courseCode?, hours, note?}], attachments?:[fileKey] }
+   ไม่ส่ง userId — server อ่านจาก token (V3-07)
    1 คำขอ = 1 วิชา: FE ใส่ courseCode เดียวกันในทุก item */
 const api = {
   // f = {term:'1-2569', status:'draft'|'submitted'} — กรองภาคที่ FE หลังแปลงเป็น พ.ศ. (backend อาจเก็บเป็น ค.ศ.)
   getClaims: async (f = {}) => {
     const { term, ...rest } = f;
-    const list = (await request('GET', '/claims' + qs({ userId: API_CONFIG.USER.userId, ...rest }))).map(normClaim);
+    const list = (await request('GET', '/claims' + qs(rest))).map(normClaim);
     return term ? list.filter((c) => c.term === term) : list;
   },
   createClaim:     async (body)     => normClaim(await request('POST', '/claims', body)),
@@ -145,34 +177,20 @@ function showError(err, el, retry) {
   console.error(err);
 }
 
-// ผู้ใช้ที่แสดงบนแถบด้านบน = { name, lastName, role } — ตอนนี้มาจากผู้ใช้ทดสอบ V2 (V3-13 เปลี่ยนเป็นข้อมูลจาก login)
-const currentUser = () => API_CONFIG.USER;
-
-async function initPage() {
+// ทุกหน้าที่ต้องเข้าสู่ระบบเรียกตอนเริ่ม: ไม่ได้เข้าสู่ระบบ → ไปหน้า login (คืน null ให้หน้าหยุดทำงาน)
+// roles = บทบาทที่เปิดหน้านี้ได้ — บทบาทอื่นถูกพาไปหน้าแรกของตัวเอง (เช่น admin เปิดหน้าสร้างคำขอไม่ได้)
+// เข้าสู่ระบบแล้ว → วาดแถบด้านบนตามบทบาท แล้วคืนผู้ใช้ { name, lastName, role }
+async function initPage(roles = REQUESTERS) {
+  let user = null;
+  try { if (await authCall('isLoggedIn')) user = await currentUser(); } catch { user = null; }
+  if (!user?.role) { goLogin(); return null; }
+  if (!roles.includes(user.role)) { location.replace(ROLE_HOME[user.role] || 'login.html'); return null; }
   try {
     const site = await loadJSON('site.json');
-    renderTopbar(site, currentUser());
+    renderTopbar(site, user);
     renderFooter(site);
   } catch (e) { console.warn('โหลด site.json ไม่ได้', e); }
-  renderUserSwitch();
-}
-
-// dropdown สลับผู้ใช้ทดสอบบนแถบด้านบน — เปลี่ยนแล้วโหลดหน้าใหม่
-// (ถ้าเปิดคำขอของคนเดิมอยู่ จะกลับไปหน้ารายการ เพราะคนใหม่ไม่มีสิทธิ์ดู)
-function renderUserSwitch() {
-  // วางไว้ฝั่งผู้ใช้ของแถบด้านบน (บนมือถืออยู่ในแผงเมนู)
-  const bar = document.querySelector('[data-mount="topbar"] .top-side') || document.querySelector('[data-mount="topbar"]');
-  if (!bar || $('userSwitch')) return;
-  const opts = TEST_USERS.map((u) =>
-    `<option value="${esc(u.userId)}">${esc(u.name)} ${esc(u.lastName)} · ${esc(ROLE_TH[u.role] || u.role)}</option>`).join('');
-  bar.insertAdjacentHTML('afterbegin',
-    `<label class="user-switch"><span>ใช้งานเป็น</span><select id="userSwitch" aria-label="ใช้งานเป็นผู้ใช้">${opts}</select></label>`);
-  $('userSwitch').value = API_CONFIG.USER.userId;
-  $('userSwitch').addEventListener('change', (e) => {
-    try { localStorage.setItem(USER_KEY, e.target.value); } catch { /* ไม่มี storage → ใช้ได้แค่หน้านี้ */ }
-    if (new URLSearchParams(location.search).get('id')) location.href = 'dashboard.html';
-    else location.reload();
-  });
+  return user;
 }
 
 /* ---------- Mock (เก็บใน localStorage เพื่อให้ข้ามหน้าได้) ---------- */
@@ -193,58 +211,58 @@ const MOCK = {
   ],
   seed: [
     // ภาค 1/2569 (ปัจจุบัน)
-    { id: 'c001', userId: 'ๅ', role: 'ta', term: '1-2569', billingCycle: 1,
+    { id: 'c001', userId: 'stub-ta', role: 'ta', term: '1-2569', billingCycle: 1,
       items: [{ date: '2026-09-15', courseCode: 'CS361', hours: 3, note: 'สอนปกติ' }],
       attachments: ['uploads/1726100000-cs361-sep.pdf'], status: 'draft',
       createdAt: '2026-09-16T08:00:00Z', updatedAt: '2026-09-16T08:00:00Z', submittedAt: null },
-    { id: 'c002', userId: '1', role: 'ta', term: '1-2569', billingCycle: 2,
+    { id: 'c002', userId: 'stub-instructor', role: 'instructor', term: '1-2569', billingCycle: 2,
       items: [{ date: '2026-09-03', courseCode: 'CS101', hours: 3, note: '' }, { date: '2026-09-10', courseCode: 'CS101', hours: 2.5, note: 'ชดเชย' }],
       attachments: ['uploads/1726000000-timesheet.pdf'], status: 'submitted',
       createdAt: '2026-09-11T09:00:00Z', updatedAt: '2026-09-12T10:20:00Z', submittedAt: '2026-09-12T10:20:00Z' },
-    { id: 'c004', userId: '1', role: 'ta', term: '1-2569', billingCycle: 1,
+    { id: 'c004', userId: 'stub-instructor', role: 'instructor', term: '1-2569', billingCycle: 1,
       items: [{ date: '2026-08-18', courseCode: 'CS261', hours: 3, note: 'สอนปกติ' }, { date: '2026-08-25', courseCode: 'CS261', hours: 3, note: 'สอนปกติ' }, { date: '2026-08-29', courseCode: 'CS261', hours: 1.5, note: 'ตรวจงาน' }],
       attachments: ['uploads/1725500000-cs261-aug.pdf'], status: 'submitted',
       createdAt: '2026-09-02T09:00:00Z', updatedAt: '2026-09-03T10:00:00Z', submittedAt: '2026-09-03T10:00:00Z' },
 
     // ภาค 2/2568
-    { id: 'c003', userId: '1', role: 'ta', term: '2-2568', billingCycle: 1,
+    { id: 'c003', userId: 'stub-ta', role: 'ta', term: '2-2568', billingCycle: 1,
       items: [{ date: '2026-03-04', courseCode: 'CS261', hours: 2, note: '' }],
       attachments: [], status: 'submitted',
       createdAt: '2026-03-05T09:00:00Z', updatedAt: '2026-03-06T11:00:00Z', submittedAt: '2026-03-06T11:00:00Z' },
-    { id: 'c005', userId: '1', role: 'ta', term: '2-2568', billingCycle: 2,
+    { id: 'c005', userId: 'stub-instructor', role: 'instructor', term: '2-2568', billingCycle: 2,
       items: [{ date: '2026-04-07', courseCode: 'CS101', hours: 3, note: 'สอนปกติ' }, { date: '2026-04-21', courseCode: 'CS101', hours: 3, note: 'สอนปกติ' }],
       attachments: ['uploads/1713000000-cs101-apr.pdf'], status: 'submitted',
       createdAt: '2026-05-07T09:00:00Z', updatedAt: '2026-05-08T10:00:00Z', submittedAt: '2026-05-08T10:00:00Z' },
 
     // ภาค 1/2568
-    { id: 'c006', userId: '1', role: 'ta', term: '1-2568', billingCycle: 1,
+    { id: 'c006', userId: 'stub-ta', role: 'ta', term: '1-2568', billingCycle: 1,
       items: [{ date: '2025-09-09', courseCode: 'CS361', hours: 3, note: '' }, { date: '2025-09-23', courseCode: 'CS361', hours: 2, note: 'ชดเชย' }],
       attachments: [], status: 'submitted',
       createdAt: '2025-10-02T09:00:00Z', updatedAt: '2025-10-03T10:00:00Z', submittedAt: '2025-10-03T10:00:00Z' },
-    { id: 'c007', userId: '1', role: 'ta', term: '1-2568', billingCycle: 2,
+    { id: 'c007', userId: 'stub-instructor', role: 'instructor', term: '1-2568', billingCycle: 2,
       items: [{ date: '2025-10-14', courseCode: 'CS101', hours: 4, note: 'สอนปกติ' }, { date: '2025-10-28', courseCode: 'CS101', hours: 3.5, note: '' }],
       attachments: ['uploads/1730000000-cs101-oct.pdf'], status: 'submitted',
       createdAt: '2025-11-07T09:00:00Z', updatedAt: '2025-11-08T10:00:00Z', submittedAt: '2025-11-08T10:00:00Z' },
 
     // ภาค 2/2567
-    { id: 'c008', userId: '1', role: 'ta', term: '2-2567', billingCycle: 1,
+    { id: 'c008', userId: 'stub-ta', role: 'ta', term: '2-2567', billingCycle: 1,
       items: [{ date: '2025-02-11', courseCode: 'CS261', hours: 3, note: '' }],
       attachments: [], status: 'submitted',
       createdAt: '2025-03-03T09:00:00Z', updatedAt: '2025-03-04T10:00:00Z', submittedAt: '2025-03-04T10:00:00Z' },
-    { id: 'c009', userId: '1', role: 'ta', term: '2-2567', billingCycle: 2,
+    { id: 'c009', userId: 'stub-instructor', role: 'instructor', term: '2-2567', billingCycle: 2,
       items: [{ date: '2025-03-12', courseCode: 'CS361', hours: 2.5, note: 'สอนปกติ' }, { date: '2025-03-26', courseCode: 'CS361', hours: 2.5, note: '' }],
       attachments: [], status: 'submitted',
       createdAt: '2025-04-07T09:00:00Z', updatedAt: '2025-04-08T10:00:00Z', submittedAt: '2025-04-08T10:00:00Z' }
   ],
   load() {
     try {
-      const raw = localStorage.getItem('mockClaimsV4');
+      const raw = localStorage.getItem('mockClaimsV5');
       if (raw !== null) return JSON.parse(raw) || [];
       this.save(this.seed);
     } catch { /* ใช้ seed ในหน่วยความจำแทน */ }
     return JSON.parse(JSON.stringify(this.seed));
   },
-  save(l) { try { localStorage.setItem('mockClaimsV4', JSON.stringify(l)); } catch { /* ข้าม */ } }
+  save(l) { try { localStorage.setItem('mockClaimsV5', JSON.stringify(l)); } catch { /* ข้าม */ } }
 };
 
 // เติมยอดรวมแบบเดียวกับที่ server ส่งกลับ
@@ -259,13 +277,17 @@ async function mockRequest(method, path, body) {
   const url = new URL(path, 'http://mock'), p = url.pathname, q = url.searchParams;
   const list = MOCK.load();
   const bad = (m) => new ApiError('VALIDATION_ERROR', m, 400);
+  // เหมือน server V3: ผู้ใช้มาจาก token ไม่ใช่จาก body (โหมด mock ใช้ sub ของ auth.stub.js)
+  const me = await currentUser();
+  if (!me?.role) throw new ApiError('UNAUTHORIZED', 'กรุณาเข้าสู่ระบบ', 401);
+  const owner = me.sub || me.role;
   const check = (b) => {
-    if (!b || !b.userId || !b.role || !b.term || !b.billingCycle || !Array.isArray(b.items)) throw bad('ข้อมูลไม่ครบ');
+    if (!b || !b.term || !b.billingCycle || !Array.isArray(b.items)) throw bad('ข้อมูลไม่ครบ');
     b.items.forEach((x) => { if (!x.date || !(Number(x.hours) > 0)) throw bad('hours ต้องมากกว่า 0'); });
     if (new Set(b.items.map((x) => x.courseCode || '')).size > 1) throw bad('คำขอ 1 ฉบับเบิกได้ 1 วิชา');
   };
   const clean = (b) => ({
-    userId: b.userId, role: b.role, term: b.term, billingCycle: Number(b.billingCycle),
+    userId: owner, role: me.role, term: b.term, billingCycle: Number(b.billingCycle),
     items: b.items.map((x) => ({ date: x.date, courseCode: x.courseCode || '', hours: Number(x.hours), note: x.note || '' })),
     attachments: b.attachments || []
   });
@@ -276,7 +298,7 @@ async function mockRequest(method, path, body) {
 
   if (p === '/claims' && method === 'GET') {
     return list.filter((c) =>
-      (!q.get('userId') || c.userId === q.get('userId')) &&
+      c.userId === owner &&
       (!q.get('status') || c.status === q.get('status')) &&
       (!q.get('term') || c.term === q.get('term'))).map(view);
   }
@@ -291,7 +313,7 @@ async function mockRequest(method, path, body) {
 
   const m = p.match(/^\/claims\/([^/]+)(\/submit)?$/);
   if (m) {
-    const c = list.find((x) => x.id === decodeURIComponent(m[1]));
+    const c = list.find((x) => x.id === decodeURIComponent(m[1]) && x.userId === owner); // คำขอของคนอื่น = ไม่พบ
     if (!c) throw new ApiError('NOT_FOUND', 'ไม่พบคำขอ', 404);
     if (method === 'GET') return view(c);
     if (!EDITABLE.includes(c.status)) throw new ApiError('INVALID_STATE', 'คำขอนี้ถูกยื่นแล้ว ไม่สามารถแก้ไขได้', 409);

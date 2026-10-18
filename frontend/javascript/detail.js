@@ -71,4 +71,4 @@ async function onSubmit() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => { initPage(); loadDetail(); });
+document.addEventListener('DOMContentLoaded', async () => { if (await initPage()) loadDetail(); });

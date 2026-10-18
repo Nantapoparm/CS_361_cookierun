@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ภาพรวมเจ้าหน้าที่ | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/claims.css">
+  <link rel="stylesheet" href="css/ui.css">
+</head>
+<body class="app">
+  <header class="topbar" data-mount="topbar"></header>
+  <main class="main"><div class="content">
+
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">เจ้าหน้าที่ · ภาพรวมรอบเบิก</div>
+        <h1 id="hello">สวัสดี</h1>
+      </div>
+    </div>
+
+    <!-- เนื้อหา AD1 (การ์ดรอบการเบิก, จำนวนตามสถานะ, รอตรวจล่าสุด) ทำใน V3-15 -->
+    <div class="card" id="body"></div>
+  </div></main>
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/ui.js"></script>
+  <script src="javascript/config.js"></script>
+  <script src="javascript/auth.js"></script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/admin.js"></script>
+</body>
+</html>
