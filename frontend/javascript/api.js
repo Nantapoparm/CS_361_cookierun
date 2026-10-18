@@ -138,6 +138,12 @@ function normPeriod(p) {
     description: PERIOD_KINDS.includes(String(p.description || '').trim().toLowerCase()) ? '' : (p.description ?? p.reason ?? '')
   };
 }
+// คาบ / คำขอเป็นของวิชาเดียวกันไหม: มี offeringId ทั้งคู่ → เทียบ offeringId ; ไม่งั้นเทียบ courseId
+// (คาบจาก teaching_histories ไม่มี offeringId แต่ courses จาก course_offerings มี)
+const sameOffering = (a, b) => (a?.offeringId != null && b?.offeringId != null
+  ? String(a.offeringId) === String(b.offeringId)
+  : !!a?.courseId && a.courseId === b?.courseId);
+
 // ไม่มี courses ใน response → รวบรวมจากคาบที่ได้มา
 function coursesOf(periods) {
   const map = new Map();

@@ -60,7 +60,7 @@ function weekDays() {
 /* ---------- วาดปฏิทิน ---------- */
 
 // สีประจำวิชาของ TA (หลายวิชา) ; อาจารย์ใช้สีตามประเภทคาบ
-const courseIdx = (e) => Math.max(0, courses.findIndex((c) => (c.offeringId ?? c.courseId) === (e.offeringId ?? e.courseId)));
+const courseIdx = (e) => Math.max(0, courses.findIndex((c) => sameOffering(c, e)));
 const shortName = (s) => String(s || '').replace(/^(ศ\.|รศ\.|ผศ\.|อ\.)?(ดร\.)?/, (m) => (m ? 'อ.' : '')).replace(/\s.*$/, '');
 
 function evHtml(e) {
@@ -132,8 +132,8 @@ function renderEmpty() {
 /* ---------- กล่องด้านข้าง ---------- */
 
 function usualSlot(c) {
-  const wd = c.weekdays?.length ? c.weekdays : [...new Set(events.filter((e) => e.kind === 'regular' && (e.offeringId ?? e.courseId) === (c.offeringId ?? c.courseId)).map((e) => parseDay(e.date).getDay()))];
-  const any = events.find((e) => (e.offeringId ?? e.courseId) === (c.offeringId ?? c.courseId) && e.kind !== 'cancelled');
+  const wd = c.weekdays?.length ? c.weekdays : [...new Set(events.filter((e) => e.kind === 'regular' && sameOffering(e, c)).map((e) => parseDay(e.date).getDay()))];
+  const any = events.find((e) => sameOffering(e, c) && e.kind !== 'cancelled');
   const t = c.startTime ? timeRange(c.startTime, c.endTime) : any ? timeRange(any.startTime, any.endTime) : '';
   return [wd.map((d) => TH_DAY[d]).join('/'), t].filter(Boolean).join(' ');
 }
@@ -143,7 +143,7 @@ function renderSide() {
   const ym = view === 'month' ? month : weekDays()[3].slice(0, 7);
   const inMonth = (cache[ym] ? eventsOf(cache[ym]) : events).filter((e) => e.date.startsWith(ym) && e.kind !== 'cancelled');
   const sumOf = (c) => {
-    const list = inMonth.filter((e) => (e.offeringId ?? e.courseId) === (c.offeringId ?? c.courseId));
+    const list = inMonth.filter((e) => sameOffering(e, c));
     return { n: list.length, h: sumHours(list.map((e) => ({ hours: e.hours ?? hoursBetween(e.startTime, e.endTime) }))) };
   };
   const unit = student() ? 'วัน' : 'คาบ';
