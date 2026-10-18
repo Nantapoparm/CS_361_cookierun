@@ -7,12 +7,11 @@
   <link rel="icon" href="assets/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/claims.css">
   <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/user.css">
 </head>
 <body class="app">
   <header class="topbar" data-mount="topbar"></header>
@@ -20,14 +19,15 @@
 
     <div class="page-head">
       <div>
-        <div class="eyebrow">ประวัติคำขอ · รายละเอียด</div>
+        <div class="eyebrow" id="eyebrow"><a href="dashboard.html">ประวัติคำขอ</a></div>
         <h1 id="title">รายละเอียดคำขอ</h1>
+        <p class="lead" id="lead"></p>
       </div>
-      <div class="tools"><a class="btn ghost" href="dashboard.html">กลับประวัติคำขอ</a></div>
+      <div class="tools" id="tools"><a class="btn ghost" href="dashboard.html">← กลับรายการ</a></div>
     </div>
 
     <div id="msg"></div>
-    <div id="detail"></div>
+    <div id="body"></div>
   </div></main>
   <footer class="site-footer" data-mount="footer"></footer>
 
@@ -37,6 +37,7 @@
   <script src="javascript/config.js"></script>
   <script src="javascript/auth.js"></script>
   <script src="javascript/api.js"></script>
+  <script src="javascript/pdf.js"></script>
   <script src="javascript/detail.js"></script>
 </body>
 </html>

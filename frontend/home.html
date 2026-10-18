@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ภาพรวม | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/user.css">
+</head>
+<body class="app">
+  <header class="topbar" data-mount="topbar"></header>
+  <main class="main"><div class="content">
+
+    <div class="page-head" id="head">
+      <div>
+        <div class="eyebrow" id="eyebrow">ภาพรวม</div>
+        <h1 id="hello">สวัสดี</h1>
+        <p class="lead" id="lead"></p>
+      </div>
+      <div class="tools">
+        <a class="btn ghost" href="calendar.html" id="btnCal">ดูปฏิทินคาบสอน</a>
+        <a class="btn" href="form.html" id="btnNew">สร้างคำขอจากปฏิทิน</a>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+    <div class="grid c3 home-cards">
+      <section class="period" id="period" aria-label="รอบการเบิกปัจจุบัน"></section>
+      <section class="card cap" id="cap" aria-labelledby="capTitle"></section>
+      <section class="card month" id="month" aria-labelledby="monthTitle"></section>
+    </div>
+    <div class="home-alerts" id="alerts"></div>
+
+    <section class="table-card recent" id="recent" aria-labelledby="recentTitle">
+      <div class="card-head"><h3 id="recentTitle">คำขอล่าสุด</h3><a class="link" href="dashboard.html">ดูทั้งหมด →</a></div>
+      <table class="dtable">
+        <thead><tr><th>เลขที่</th><th id="thCourse">วิชา</th><th>งานเดือน</th><th class="num">ชั่วโมง</th><th class="num">ยอดเบิก (บาท)</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </div></main>
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/ui.js"></script>
+  <script src="javascript/config.js"></script>
+  <script src="javascript/auth.js"></script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/home.js"></script>
+</body>
+</html>

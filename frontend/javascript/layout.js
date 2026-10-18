@@ -8,16 +8,18 @@ const NAV_PUBLIC = [
 const NAV_REQUESTER = [
   { href: 'home.html', text: 'ภาพรวม', match: ['home.html'] },
   { href: 'calendar.html', text: (r) => (r === 'student_helper' ? 'ปฏิทินงาน' : 'ปฏิทินคาบสอน'), match: ['calendar.html', 'makeup.html'] },
-  { href: 'form.html', text: 'สร้างคำขอ', match: ['form.html'] },
+  { href: 'form.html', text: 'สร้างคำขอ', match: ['form.html', 'submit.html'] },
   { href: 'dashboard.html', text: 'ประวัติคำขอ', match: ['dashboard.html', 'detail.html'] }
 ];
+// นักศึกษาช่วยงานมี 2 เมนูตาม Figma S1/S2 (สร้างคำขอจากปุ่มในภาพรวม/ปฏิทิน และดูคำขอจากภาพรวม)
+const NAV_STUDENT = NAV_REQUESTER.slice(0, 2);
 const NAV_ADMIN = [
   { href: 'admin.html', text: 'ภาพรวม', match: ['admin.html'] },
   { href: 'admin-claims.html', text: 'คำขอทั้งหมด', match: ['admin-claims.html', 'admin-review.html'] },
   { href: 'admin-counter.html', text: 'เคาน์เตอร์เซ็นเอกสาร', match: ['admin-counter.html'] }
 ];
-// หน้าที่ยังไม่ได้สร้าง (V3-14, V3-15) แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
-const NAV_SOON = new Set(['home.html', 'calendar.html', 'admin-claims.html', 'admin-counter.html']);
+// หน้าที่ยังไม่ได้สร้าง (V3-15) แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
+const NAV_SOON = new Set(['admin-claims.html', 'admin-counter.html']);
 
 // ป้ายบทบาท + ตำแหน่งใต้ชื่อ
 const ROLE_CHIP = { instructor: 'อาจารย์', ta: 'TA', student_helper: 'นศ.ช่วยงาน', admin: 'เจ้าหน้าที่' };
@@ -42,7 +44,7 @@ function navLinks(items, role) {
 // user = { name, lastName, role } ของผู้ที่เข้าสู่ระบบ ; ไม่ส่ง user = หน้าสาธารณะ (index.html)
 function renderTopbar(site, user) {
   const m = site.meta;
-  const items = !user ? NAV_PUBLIC : user.role === 'admin' ? NAV_ADMIN : NAV_REQUESTER;
+  const items = !user ? NAV_PUBLIC : user.role === 'admin' ? NAV_ADMIN : user.role === 'student_helper' ? NAV_STUDENT : NAV_REQUESTER;
   const side = user
     ? `<span class="role-chip ${user.role === 'admin' ? 'staff' : ''}">${esc(ROLE_CHIP[user.role] || user.role)}</span>
        <span class="who-box">
@@ -54,7 +56,7 @@ function renderTopbar(site, user) {
     : `<a class="btn-in" href="${esc(site.sidebar?.login?.url || 'login.html')}">เข้าสู่ระบบ</a>`;
 
   const bar = mount('topbar', `
-    <a class="brand" href="${user ? (user.role === 'admin' ? 'admin.html' : 'dashboard.html') : 'index.html'}">
+    <a class="brand" href="${user ? (user.role === 'admin' ? 'admin.html' : 'home.html') : 'index.html'}">
       <img class="brand-logo" src="${esc(m.logo)}" alt="${esc(m.logoAlt)}">
       <span>
         <span class="brand-name">${esc(m.brand)}</span>

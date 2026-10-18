@@ -1,159 +1,152 @@
-// dashboard.js — หน้ารายการคำขอ
-// Input : ตัวกรองภาคการศึกษา (เช่น 1-2569) และสถานะ (draft | submitted) → GET /claims?term=&status= (ผู้ใช้มาจาก token)
-//         ตัวกรองรอบการเบิก (billingCycle) และวิชา (courseCode) กรองฝั่ง FE เพราะ API ไม่มี query นี้
-// Output: ตารางคำขอ (ใหม่ → เก่า) แบ่งหน้า + แถวรวมชั่วโมง/ยอดเบิกของทุกหน้าตามตัวกรอง
-//         ยอดรวมนับทั้งฉบับร่างและที่ยื่นแล้ว
-// หมายเหตุ: แบ่งหน้าฝั่ง FE จากรายการที่โหลดมาทั้งหมด ถ้าคำขอมากจริงควรให้ API รองรับ pagination
+// dashboard.js — ประวัติคำขอ (Figma I10 · ST4 ไม่มีข้อมูล · ST5 โหลดไม่สำเร็จ)
+// Input : GET /claims (ผู้ใช้มาจาก token) + GET /terms + GET /current-period (ภาคเริ่มต้น)
+// Output: ตารางคำขอ (งานเดือนใหม่ → เก่า) กรองภาค / รอบ / วิชา / สถานะ / เลขที่ ฝั่งหน้าเว็บ
+//         แท็บนับตามสถานะ แถวรวมชั่วโมงและยอดเบิกของทุกหน้าตามตัวกรอง
 
-let all = [];   // คำขอที่โหลดมาตามภาค/สถานะ (ยังไม่กรองรอบ/วิชา)
+let all = [];
 let page = 1;
+let group = '';           // แท็บสถานะที่เลือก ('' = ทั้งหมด)
+const PAGE_SIZE = 10;
 
-const round2 = (n) => Math.round(n * 100) / 100;
-const pageSize = () => Number($('pageSize').value) || 5;
+// กลุ่มสถานะของแท็บ (approved แยกตามช่องทาง) — opt = แสดงเฉพาะเมื่อมีคำขอ
+const GROUPS = [
+  { key: 'draft', th: 'ร่าง', test: (c) => c.status === 'draft' },
+  { key: 'submitted', th: 'รอตรวจ', test: (c) => c.status === 'submitted' },
+  { key: 'returned', th: 'ส่งกลับแก้ไข', test: (c) => c.status === 'returned' },
+  { key: 'sign', th: 'รอเซ็น', test: (c) => c.status === 'approved' && c.printMethod !== 'self_print' },
+  { key: 'self', th: 'ปริ้นเซ็นเอง', test: (c) => c.status === 'approved' && c.printMethod === 'self_print' },
+  { key: 'documents_received', th: 'รับเอกสารแล้ว', test: (c) => c.status === 'documents_received', opt: true },
+  { key: 'sent_to_finance', th: 'ส่งการเงินแล้ว', test: (c) => c.status === 'sent_to_finance' },
+  { key: 'rejected', th: 'ไม่อนุมัติ', test: (c) => c.status === 'rejected', opt: true }
+];
+const groupOf = (k) => GROUPS.find((g) => g.key === k);
 
-// 16.5 → '16 ชม. 30 นาที'
-function fmtHours(h) {
-  const t = Math.round(Number(h || 0) * 60);
-  const hh = Math.floor(t / 60), mm = t % 60;
-  return mm ? `${hh} ชม. ${mm} นาที` : `${hh} ชม.`;
+// กรองทุกอย่างยกเว้นแท็บสถานะ (แท็บนับจากผลนี้)
+function baseFiltered() {
+  const term = $('fTerm').value, cycle = $('fCycle').value, course = $('fCourse').value;
+  const q = $('fSearch').value.trim().replace(/^#/, '');
+  return all.filter((c) => (!term || c.term === term) && (!cycle || String(cycleOf(c)) === cycle) &&
+    (!course || courseShort(c) === course) && (!q || c.claimId.includes(q)));
 }
-
-const num = (n) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 });
-
-// data-label = ชื่อคอลัมน์ที่แสดงเมื่อแถวกลายเป็นการ์ดบนมือถือ
-const row = (c) => {
-  const id = encodeURIComponent(c.id);
-  const edit = EDITABLE.includes(c.status) ? `<a class="btn ghost sm" href="form.html?id=${id}">แก้ไข</a> ` : '';
-  return `<tr>
-    <td class="id">#${esc(c.id)}</td>
-    <td data-label="วิชา">${esc(courseOf(c) || '-')}</td>
-    <td data-label="ภาคการศึกษา">${esc(termLabel(c.term))}</td>
-    <td data-label="รอบการเบิก">${esc(cycleLabel(c.billingCycle))}</td>
-    <td data-label="ชั่วโมง" class="num">${num(c.totalHours)}</td>
-    <td data-label="ยอดเบิก (บาท)" class="num">${num(c.totalAmount)}</td>
-    <td data-label="สถานะ">${statusBadge(c.status, c.printMethod)}</td>
-    <td class="act">${edit}<a class="btn ghost sm" href="detail.html?id=${id}">ดูรายละเอียด</a></td>
-  </tr>`;
-};
-const msgRow = (html) => `<tr class="empty-row"><td colspan="8">${html}</td></tr>`;
-
-// '1-2569' → 25691 (ปีก่อน แล้วตามด้วยภาค) ใช้เรียงภาคจากใหม่ไปเก่า
-const termKey = (id) => { const [s, y] = String(id).split('-').map(Number); return (y || 0) * 10 + (s || 0); };
-
-// รายการวิชาให้เลือก: API ไม่มี route รายการวิชา จึงสะสมจาก courseCode ของคำขอที่โหลดมา
-// (โหลดครั้งแรกไม่มีตัวกรอง จึงได้ครบทุกวิชาของผู้ใช้)
-const seenCourses = new Set();
-function addCourseOptions(list) {
-  const fresh = list.map(courseOf).filter((c) => c && !seenCourses.has(c));
-  fresh.forEach((c) => seenCourses.add(c));
-  $('fCourse').insertAdjacentHTML('beforeend', [...new Set(fresh)].sort().map((c) => `<option>${esc(c)}</option>`).join(''));
-}
-
-// กรองรอบ/วิชา (1 คำขอ = 1 วิชา 1 รอบ จึงเทียบค่าของคำขอได้ตรง ๆ) แล้วเรียงใหม่ → เก่า
 function filtered() {
-  const cycle = $('fCycle').value, course = $('fCourse').value;
-  let list = all;
-  if (cycle) list = list.filter((c) => String(c.billingCycle) === cycle);
-  if (course) list = list.filter((c) => courseOf(c) === course);
-  return [...list].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const st = $('fStatus').value || group;
+  const g = groupOf(st);
+  return baseFiltered().filter((c) => !g || g.test(c))
+    .sort((a, b) => b.month.localeCompare(a.month) || b.claimId.localeCompare(a.claimId));
 }
 
-const sumOf = (list) => ({
-  h: round2(list.reduce((s, c) => s + Number(c.totalHours || 0), 0)),
-  a: round2(list.reduce((s, c) => s + Number(c.totalAmount || 0), 0))
-});
+const row = (c) => `<tr>
+  <td class="id">#${esc(c.claimId)}</td>
+  <td data-label="วิชา">${esc(courseSec(c))}</td>
+  <td data-label="งานเดือน">${esc(thMonth(c.month))}</td>
+  <td data-label="รอบการเบิก">${esc(cycleShort(c))}</td>
+  <td data-label="ชม." class="num">${num(c.totalHours)}</td>
+  <td data-label="ยอดเบิก (บาท)" class="num">${num(c.totalAmount)}</td>
+  <td data-label="สถานะ">${chip(c.status, c.printMethod)}</td>
+  <td class="act">${c.status === 'returned' || c.status === 'draft'
+    ? `<a class="btn ghost sm" href="form.html?id=${encodeURIComponent(c.claimId)}">แก้ไข</a> ` : ''}<a class="btn ghost sm" href="detail.html?id=${encodeURIComponent(c.claimId)}">ดูรายละเอียด</a></td>
+</tr>`;
 
-
-// แถวรวมแถวเดียว: รวมทุกหน้าตามตัวกรอง (แสดงชั่วโมงเป็นตัวเลขทศนิยม ไม่แปลงเป็นนาที)
-const sumRow = (list) => {
-  const s = sumOf(list);
-  return `<tr class="sum">
-    <td colspan="4">รวม ${list.length} รายการ</td>
-    <td data-label="ชั่วโมง" class="num">${num(s.h)}</td>
-    <td data-label="ยอดเบิก (บาท)" class="num">${num(s.a)}</td>
-    <td colspan="2"></td>
-  </tr>`;
-};
-
-// เลขหน้า: ถ้าไม่เกิน 7 หน้าแสดงทั้งหมด ไม่งั้นแสดงหน้าแรก/สุดท้าย/รอบหน้าปัจจุบัน แล้วคั่นด้วย …
-function pageList(cur, total) {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const keep = [...new Set([1, total, cur - 1, cur, cur + 1])].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
-  const out = [];
-  keep.forEach((n, i) => { if (i && n - keep[i - 1] > 1) out.push('…'); out.push(n); });
-  return out;
-}
-
-function pagerHtml(cur, total) {
-  if (total <= 1) return '';
-  const btn = (p, text, extra = '') => `<button type="button" class="pg ${extra}" data-p="${p}"${extra.includes('on') ? ' aria-current="page"' : ''}>${text}</button>`;
-  return `<button type="button" class="pg" data-p="${cur - 1}"${cur === 1 ? ' disabled' : ''}>ก่อนหน้า</button>` +
-    pageList(cur, total).map((n) => n === '…' ? '<span class="pg gap">…</span>' : btn(n, n, n === cur ? 'on' : '')).join('') +
-    `<button type="button" class="pg" data-p="${cur + 1}"${cur === total ? ' disabled' : ''}>ถัดไป</button>`;
+function renderCounts() {
+  const base = baseFiltered();
+  const btn = (key, th, n) => `<button type="button" data-g="${key}" aria-pressed="${group === key}">${esc(th)} ${n}</button>`;
+  $('counts').innerHTML = btn('', 'ทั้งหมด', base.length) +
+    GROUPS.map((g) => { const n = base.filter(g.test).length; return g.opt && !n ? '' : btn(g.key, g.th, n); }).join('');
 }
 
 function render() {
   const list = filtered();
-  const size = pageSize();
-  const pages = Math.max(1, Math.ceil(list.length / size));
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   page = Math.min(Math.max(1, page), pages);
-  const start = (page - 1) * size;
-  const slice = list.slice(start, start + size);
-
+  const start = (page - 1) * PAGE_SIZE, slice = list.slice(start, start + PAGE_SIZE);
   const term = $('fTerm').selectedOptions[0];
   $('lead').textContent = `${$('fTerm').value ? term.textContent : 'ทุกภาคการศึกษา'} · ${list.length} รายการ`;
+  const anyFilter = ['fTerm', 'fCycle', 'fCourse', 'fStatus', 'fSearch'].some((id) => $(id).value && !(id === 'fTerm' && $(id).value === defaultTerm)) || group;
+  $('fClear').hidden = !anyFilter;
+  ['fCycle', 'fCourse', 'fStatus'].forEach((id) => $(id).classList.toggle('on', !!$(id).value));
+  renderCounts();
 
   if (!list.length) {
-    $('rows').innerHTML = msgRow(emptyState('ยังไม่มีคำขอ', 'ลองเปลี่ยนตัวกรอง หรือสร้างคำขอใหม่', { text: 'สร้างคำขอใหม่', href: 'form.html' }));
-    $('foot').innerHTML = '';
+    // ST4 — ไม่พบคำขอ
+    $('tableCard').innerHTML = `<div class="state"><span class="ic" aria-hidden="true">🔍</span>
+      <h3>${all.length ? 'ไม่พบคำขอตามตัวกรอง' : 'ยังไม่มีคำขอ'}</h3>
+      <p>${all.length ? 'ลองเปลี่ยนรอบการเบิกหรือสถานะ · ถ้ายังไม่เคยสร้างคำขอ เริ่มจากปฏิทินได้เลย' : 'เริ่มจากบันทึกคาบในปฏิทิน แล้วสร้างคำขอได้ในคลิกเดียว'}</p>
+      <div class="state-btns">${anyFilter ? '<button type="button" class="btn ghost" id="clear2">ล้างตัวกรอง</button>' : ''}<a class="btn" href="form.html">สร้างคำขอใหม่</a></div></div>`;
+    $('clear2')?.addEventListener('click', clearFilters);
     $('pageInfo').textContent = '';
     $('pager').innerHTML = '';
     return;
   }
-
+  if (!$('rows')) restoreTable();
   $('rows').innerHTML = slice.map(row).join('');
-  $('foot').innerHTML = sumRow(list); // รวมทุกหน้าตามตัวกรอง ไม่ใช่เฉพาะหน้านี้
+  const h = list.reduce((s, c) => s + Number(c.totalHours || 0), 0), a = list.reduce((s, c) => s + Number(c.totalAmount || 0), 0);
+  $('foot').innerHTML = `<tr class="sum"><td colspan="4">รวม ${list.length} รายการ</td><td data-label="ชม." class="num">${num(h)}</td><td data-label="ยอดเบิก (บาท)" class="num">${num(a)}</td><td colspan="2"></td></tr>`;
   $('pageInfo').textContent = `แสดง ${start + 1}–${start + slice.length} จาก ${list.length} รายการ`;
-  $('pager').innerHTML = pagerHtml(page, pages);
+  $('pager').innerHTML = pages <= 1 ? `<span class="pg on" aria-current="page">1</span>` :
+    `<button type="button" class="pg" data-p="${page - 1}"${page === 1 ? ' disabled' : ''} aria-label="หน้าก่อน">‹</button>` +
+    Array.from({ length: pages }, (_, i) => i + 1).map((n) => (n === page ? `<span class="pg on" aria-current="page">${n}</span>` : `<button type="button" class="pg" data-p="${n}">${n}</button>`)).join('') +
+    `<button type="button" class="pg" data-p="${page + 1}"${page === pages ? ' disabled' : ''} aria-label="หน้าถัดไป">›</button>`;
 }
 
-// โหลดจาก API (เมื่อเปลี่ยนภาคหรือสถานะ)
-async function loadClaims() {
+let tableHtml = '';
+const restoreTable = () => { $('tableCard').innerHTML = tableHtml; };
+
+let defaultTerm = '';
+function clearFilters() {
+  $('fTerm').value = defaultTerm;
+  ['fCycle', 'fCourse', 'fStatus', 'fSearch'].forEach((id) => { $(id).value = ''; });
+  group = '';
+  page = 1;
+  render();
+}
+
+async function load() {
   $('msg').innerHTML = '';
-  $('rows').innerHTML = msgRow(skeleton(['', '', '', '']) + '<p class="loading-text">กำลังโหลดข้อมูล…</p>');
-  $('lead').textContent = '';
-  $('foot').innerHTML = ''; $('pager').innerHTML = ''; $('pageInfo').textContent = '';
+  if (!$('rows')) restoreTable();
+  $('rows').innerHTML = `<tr class="empty-row"><td colspan="8">${skeleton(['', '', '', ''])}<p class="loading-text">กำลังโหลดข้อมูล…</p></td></tr>`;
+  $('foot').innerHTML = '';
   try {
-    all = await api.getClaims({ term: $('fTerm').value, status: $('fStatus').value });
-    addCourseOptions(all);
+    const [claims, terms, period] = await Promise.all([api.getClaims(), api.getTerms().catch(() => []), api.getCurrentPeriod().catch(() => null)]);
+    all = claims;
+    // ภาคจาก /terms + ภาคที่มีคำขอ
+    const ids = new Set([...terms.map((t) => t.id), ...all.map((c) => c.term)]);
+    const key = (id) => { const [s, y] = id.split('-').map(Number); return y * 10 + s; };
+    $('fTerm').innerHTML = '<option value="">ทุกภาคการศึกษา</option>' + [...ids].sort((a, b) => key(b) - key(a)).map((id) => `<option value="${esc(id)}">ภาค ${esc(termLabel(id))}</option>`).join('');
+    defaultTerm = period ? `${period.semester}-${be(period.academicYear)}` : '';
+    if (ids.has(defaultTerm)) $('fTerm').value = defaultTerm;
+    $('fCourse').innerHTML = '<option value="">ทุกวิชา</option>' + [...new Set(all.map(courseShort))].sort().map((c) => `<option>${esc(c)}</option>`).join('');
     render();
   } catch (err) {
-    all = [];
-    $('rows').innerHTML = '';
-    showError(err, $('msg'), loadClaims);
+    // ST5 — โหลดไม่สำเร็จ (ซ่อนตัวกรอง)
+    $('filters').hidden = true;
+    $('counts').innerHTML = '';
+    showErrorState($('tableCard'), 'โหลดรายการคำขอไม่สำเร็จ', err, () => { $('filters').hidden = false; load(); });
   }
 }
 
-async function initDashboard() {
-  if (!(await initPage())) return;
-  $('fStatus').insertAdjacentHTML('beforeend',
-    Object.entries(STATUS).map(([id, s]) => `<option value="${id}">${esc(s.th)}</option>`).join(''));
-  try {
-    const terms = [...await api.getTerms()].sort((a, b) => termKey(b.id) - termKey(a.id));
-    $('fTerm').insertAdjacentHTML('beforeend', terms.map((t) => `<option value="${esc(t.id)}">${esc(t.name || termLabel(t.id))}</option>`).join(''));
-  } catch (err) { showError(err, $('msg')); }
-
-  // เปลี่ยนภาค/สถานะ → โหลดใหม่ ; เปลี่ยนรอบ/วิชา/จำนวนต่อหน้า → กรองซ้ำจากข้อมูลเดิม ; ทุกกรณีกลับหน้า 1
-  ['fTerm', 'fStatus'].forEach((id) => $(id).addEventListener('change', () => { page = 1; loadClaims(); }));
-  ['fCycle', 'fCourse', 'pageSize'].forEach((id) => $(id).addEventListener('change', () => { page = 1; render(); }));
+async function initHistory() {
+  const user = await initPage();
+  if (!user) return;
+  tableHtml = $('tableCard').innerHTML;
+  $('fStatus').insertAdjacentHTML('beforeend', GROUPS.map((g) => `<option value="${g.key}">${esc(g.th)}</option>`).join(''));
+  ['fTerm', 'fCycle', 'fCourse', 'fStatus'].forEach((id) => $(id).addEventListener('change', () => { page = 1; if (id === 'fStatus') group = ''; render(); }));
+  $('fSearch').addEventListener('input', () => { page = 1; render(); });
+  $('fClear').addEventListener('click', clearFilters);
+  $('counts').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-g]');
+    if (!b) return;
+    group = b.dataset.g;
+    $('fStatus').value = '';
+    page = 1;
+    render();
+  });
   $('pager').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-p]');
     if (!b || b.disabled) return;
     page = Number(b.dataset.p);
     render();
-    $('rows').closest('.table-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
-  loadClaims();
+  load();
 }
 
-document.addEventListener('DOMContentLoaded', initDashboard);
+document.addEventListener('DOMContentLoaded', initHistory);

@@ -1,7 +1,7 @@
 // api.js — สลับ mock / API จริงได้ที่ API_CONFIG.USE_MOCK + ตัวช่วยที่ทุกหน้าใช้ร่วมกัน
-// รูปแบบข้อมูล/error ตาม openapi.yaml ต้องโหลดหลัง core.js, layout.js, ui.js, config.js และ auth.js
-// ข้อมูล mock เก็บใน localStorage (key: mockClaimsV5) เพื่อให้ข้ามหน้าได้ — ล้างข้อมูลทดสอบ: localStorage.removeItem('mockClaimsV5')
-// ทุกหน้าเรียกผ่านออบเจกต์ `api` เท่านั้น สลับโหมดที่ API_CONFIG.USE_MOCK (true = mock, false = API จริง) แล้วตั้ง API_CONFIG.BASE_URL
+// Route และรูปแบบ response ตาม backend/api/openapi.yaml (V3, PR #87) ชื่อฟิลด์ตาม DB ของ issue #69
+// ต้องโหลดหลัง core.js, layout.js, ui.js, config.js และ auth.js
+// ข้อมูล mock เก็บใน localStorage (key: mockV3) เพื่อให้ข้ามหน้าได้ — ล้างข้อมูลทดสอบ: localStorage.removeItem('mockV3')
 //
 // ผู้ใช้มาจาก Auth (auth.js ของคนที่ 1 — V3-02) ทุก request แนบ Authorization: Bearer <token>
 // Lambda อ่านผู้ใช้จาก token เอง (V3-07) หน้าเว็บจึงไม่ส่ง userId
@@ -13,8 +13,8 @@ const API_CONFIG = {
   BASE_URL: window.APP_CONFIG?.apiBaseUrl || 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com'
 };
 
-// หน้าแรกของแต่ละบทบาทหลังเข้าสู่ระบบ — V3-14 เปลี่ยนผู้ขอเบิกเป็น home.html
-const ROLE_HOME = { instructor: 'dashboard.html', ta: 'dashboard.html', student_helper: 'dashboard.html', admin: 'admin.html' };
+// หน้าแรกของแต่ละบทบาทหลังเข้าสู่ระบบ
+const ROLE_HOME = { instructor: 'home.html', ta: 'home.html', student_helper: 'home.html', admin: 'admin.html' };
 // บทบาทที่เปิดหน้าแต่ละกลุ่มได้ (ส่งให้ initPage)
 const REQUESTERS = ['instructor', 'ta', 'student_helper'];
 const STAFF = ['admin'];
@@ -29,7 +29,7 @@ const hasAuth = () => typeof Auth !== 'undefined';
 // รองรับทั้งฟังก์ชันแบบ sync และ async ของ auth.js
 const authCall = async (fn, ...args) => (hasAuth() && typeof Auth[fn] === 'function' ? Auth[fn](...args) : null);
 
-// { name, lastName, role, sub? } ; ไม่มี getUser() ใน auth.js → ใช้บทบาทจาก getUserRole() อย่างเดียว
+// { name, lastName, role, username?, sub? } ; ไม่มี getUser() ใน auth.js → ใช้บทบาทจาก getUserRole() อย่างเดียว
 async function currentUser() {
   const u = await authCall('getUser');
   if (u) return u;
@@ -88,18 +88,15 @@ async function realRequest(method, path, body) {
 
 const qs = (o) => {
   const p = new URLSearchParams();
-  Object.entries(o || {}).forEach(([k, v]) => { if (v) p.set(k, v); });
+  Object.entries(o || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, v); });
   return p.toString() ? '?' + p : '';
 };
 
-// DB เก็บปีเป็น ค.ศ. (backend อาจส่ง '1-2026') → FE ใช้ พ.ศ. เสมอ: '1-2026' → '1-2569'
+// DB เก็บปีเป็น ค.ศ. หรือ พ.ศ. ก็ได้ → FE ใช้ พ.ศ. เสมอ: '1-2026' → '1-2569'
 const toBuddhistTerm = (t) => {
   const m = /^([1-3])-(\d{4})$/.exec(String(t || '').trim());
-  if (!m) return t;
-  const y = Number(m[2]);
-  return `${m[1]}-${y < 2400 ? y + 543 : y}`;
+  return m ? `${m[1]}-${be(m[2])}` : t;
 };
-const normClaim = (c) => (c ? { ...c, term: toBuddhistTerm(c.term) } : c);
 // แปลงเป็น พ.ศ. แล้วตัดภาคที่ซ้ำ (เช่น 1-2569 กับ 1-2026 คือภาคเดียวกัน)
 const normTerms = (list) => {
   const seen = new Map();
@@ -110,70 +107,162 @@ const normTerms = (list) => {
   return [...seen.values()];
 };
 
-/* ---------- 8 routes ตาม openapi.yaml ----------
-   claim = { id, userId, role, term:'1-2569', billingCycle:1|2,
-             items:[{date, courseCode?, hours, note?}], attachments:[fileKey],
-             status:'draft'|'submitted', totalHours, totalAmount, createdAt, updatedAt, submittedAt|null }
-   body ของ POST/PUT = { role, term, billingCycle, items:[{date, courseCode?, hours, note?}], attachments?:[fileKey] }
-   ไม่ส่ง userId — server อ่านจาก token (V3-07)
-   1 คำขอ = 1 วิชา: FE ใส่ courseCode เดียวกันในทุก item */
+/* ---------- รูปแบบข้อมูลที่หน้าเว็บใช้ ----------
+   period (คาบในปฏิทิน, teaching_histories) = { historyId, date:'2026-09-07', startTime:'09:30', endTime:'12:30',
+     kind:'regular'|'cancelled'|'makeup', courseId, courseName, section?, type:'lecture'|'lab', room, description,
+     offeringId?, instructorName? (TA) }
+   course (วิชาของผู้ใช้ในภาคนี้) = { offeringId, courseId, courseName, section?, type, room?, instructorName? }
+   workDay (วันทำงาน นศ.ช่วยงาน, work_information) = { workId, offeringId, workDate, startTime, endTime, hours, Remark }
+   claim = { claimId, status, printMethod, role, offeringId, courseId, courseName, section?, type, room?, instructorName?,
+     academicYear, semester, month:'2026-09' (งานเดือน), cycle, deadline, dayClaim, revision,
+     items:[{ workId, workDate, startTime, endTime, hours, Remark, kind }], totalHours, totalAmount, ratePerHour,
+     returnNote?, returnedAt?, returnedBy?, flaggedWorkIds?:[], createdAt, updatedAt, submittedAt } */
+
+// เวลา ISO ('2026-09-07T09:30:00') หรือ 'HH:MM' → 'HH:MM' ; วันที่อ่านจาก date หรือจาก startTime ที่เป็น ISO
+function normPeriod(p) {
+  const date = p.date || (String(p.startTime).includes('T') ? String(p.startTime).slice(0, 10) : '');
+  return {
+    ...p,
+    historyId: p.historyId ?? p.id ?? p.exceptionId,
+    date,
+    startTime: hhmm(p.startTime),
+    endTime: hhmm(p.endTime),
+    kind: p.kind || 'regular',
+    type: p.type || 'lecture',
+    room: p.room || '',
+    description: p.description ?? p.reason ?? ''
+  };
+}
+// ไม่มี courses ใน response → รวบรวมจากคาบที่ได้มา
+function coursesOf(periods) {
+  const map = new Map();
+  periods.forEach((p) => {
+    const key = p.offeringId ?? `${p.courseId}|${p.type}`;
+    if (!map.has(key)) map.set(key, { offeringId: p.offeringId, courseId: p.courseId, courseName: p.courseName || '', section: p.section || '', type: p.type, room: p.room, instructorName: p.instructorName || '' });
+  });
+  return [...map.values()];
+}
+const normClaim = (c) => (c ? {
+  ...c,
+  claimId: String(c.claimId ?? c.id),
+  term: `${c.semester}-${be(c.academicYear)}`,
+  items: (c.items || []).map((x) => ({ ...x, startTime: hhmm(x.startTime), endTime: hhmm(x.endTime), workDate: String(x.workDate).slice(0, 10) }))
+} : c);
+
+/* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
-  // f = {term:'1-2569', status:'draft'|'submitted'} — กรองภาคที่ FE หลังแปลงเป็น พ.ศ. (backend อาจเก็บเป็น ค.ศ.)
+  // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle? }
+  getCurrentPeriod: () => request('GET', '/current-period'),
+
+  // ปฏิทินคาบสอน (อาจารย์ / TA) → { month, periods:[period], summary:[{courseId, periods, hours}], courses:[course] }
+  getSchedule: async (month) => {
+    const d = await request('GET', '/schedule' + qs({ month }));
+    const periods = (d?.periods || []).map(normPeriod).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+    return { month, periods, summary: d?.summary || [], courses: d?.courses?.length ? d.courses : coursesOf(periods) };
+  },
+  // body = { kind, courseId, type, startTime, endTime (ISO 8601), room, description, repeatUntil? (POST เท่านั้น) }
+  createSchedule:  (body)     => request('POST',   '/schedule', body),
+  updateSchedule:  (id, body) => request('PUT',    `/schedule/${encodeURIComponent(id)}`, body),
+  deleteSchedule:  (id)       => request('DELETE', `/schedule/${encodeURIComponent(id)}`),
+
+  // ปฏิทินงาน (นักศึกษาช่วยงาน) → { items:[workDay], courses:[course] } ; body = { offeringId, workDate, startTime, endTime, Remark? }
+  // response เป็น array ล้วนก็ได้ (courses รวบรวมจากวันทำงานที่ได้มา)
+  getWorkDays: async (month) => {
+    const d = await request('GET', '/work-days' + qs({ month }));
+    const items = (Array.isArray(d) ? d : (d?.items || []))
+      .map((w) => ({ ...w, workDate: String(w.workDate).slice(0, 10), startTime: hhmm(w.startTime), endTime: hhmm(w.endTime), hours: Number(w.hours ?? hoursBetween(w.startTime, w.endTime)) }))
+      .sort((a, b) => (a.workDate + a.startTime).localeCompare(b.workDate + b.startTime));
+    return { month, items, courses: d?.courses?.length ? d.courses : coursesOf(items) };
+  },
+  createWorkDay:   (body)     => request('POST',   '/work-days', body),
+  updateWorkDay:   (id, body) => request('PUT',    `/work-days/${encodeURIComponent(id)}`, body),
+  deleteWorkDay:   (id)       => request('DELETE', `/work-days/${encodeURIComponent(id)}`),
+
+  // คำขอ — f = { term:'1-2569', status } กรองภาคที่ FE หลังแปลงเป็น พ.ศ.
   getClaims: async (f = {}) => {
     const { term, ...rest } = f;
     const list = (await request('GET', '/claims' + qs(rest))).map(normClaim);
     return term ? list.filter((c) => c.term === term) : list;
   },
-  createClaim:     async (body)     => normClaim(await request('POST', '/claims', body)),
   getClaim:        async (id)       => normClaim(await request('GET',  `/claims/${encodeURIComponent(id)}`)),
+  // สร้างร่างจากปฏิทิน 1 วิชา / 1 เดือน — เดือนนั้นไม่มีคาบ = { items: [] } (ไม่สร้างคำขอ)
+  autofillClaim:   async (offeringId, month) => normClaim(await request('POST', '/claims/autofill', { offeringId, month })),
+  // กรอกเอง (ไม่มีคาบในปฏิทิน): body = { offeringId, month, items }
+  createClaim:     async (body)     => normClaim(await request('POST', '/claims', body)),
+  // แก้ร่าง / คำขอที่ถูกส่งกลับ: body = { items:[{ workId?, workDate, startTime, endTime, hours, Remark, kind }] }
   updateClaim:     async (id, body) => normClaim(await request('PUT',  `/claims/${encodeURIComponent(id)}`, body)),
-  submitClaim:     async (id)       => normClaim(await request('POST', `/claims/${encodeURIComponent(id)}/submit`)),
-  getTerms:        async ()         => normTerms(await request('GET', '/terms')),  // → [{ id:'1-2569', name, billingCycles:[{cycle, description, startDay?, lastDay}] }]
-  getRates:        ()         => request('GET',  '/rates'),  // → [{ role, ratePerHour, maxHours, maxHoursHalfLoad|null }]
-  getPresignedUrl: (p)        => request('GET',  '/uploads/presigned-url' + qs(p)) // → {uploadUrl, fileKey}
+  submitClaim:     async (id, printMethod) => normClaim(await request('POST', `/claims/${encodeURIComponent(id)}/submit`, { printMethod })),
+  setPrintMethod:  async (id, printMethod) => normClaim(await request('PUT', `/claims/${encodeURIComponent(id)}/print-method`, { printMethod })),
+  getActions:      (id)       => request('GET', `/claims/${encodeURIComponent(id)}/actions`),
+  // type = claim | makeup | blank → { downloadUrl, expiresIn } (mock: downloadUrl = null → หน้าเว็บวาดตัวอย่างเอง)
+  getPdf:          (id, type = 'claim', extra = {}) => request('GET', `/claims/${encodeURIComponent(id)}/pdf` + qs({ type, ...extra })),
+
+  getTerms:        async ()   => normTerms(await request('GET', '/terms')),  // → [{ id:'1-2569', name, billingCycles }]
+  getRates:        ()         => request('GET', '/rates')                    // → [{ role, ratePerHour, maxHours, maxHoursHalfLoad|null, maxAmountPerDay? }]
 };
 
-// อัปโหลดไฟล์เข้า S3 ด้วย presigned URL — โหมด mock ไม่อัปโหลดจริง (uploadUrl เป็น null)
-async function uploadToS3(uploadUrl, file) {
-  if (API_CONFIG.USE_MOCK || !uploadUrl) return;
-  let res;
-  try {
-    res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-  } catch {
-    throw new ApiError('UPLOAD_FAILED', 'อัปโหลดไฟล์ไม่สำเร็จ', 0);
-  }
-  if (!res.ok) throw new ApiError('UPLOAD_FAILED', 'อัปโหลดไฟล์ไม่สำเร็จ', res.status);
-}
-
 /* ---------- ค่าคงที่ + ตัวช่วยร่วม ---------- */
-// API V2 มีสถานะแค่ 2 ค่า (ClaimStatus) ใช้เป็นตัวเลือกในตัวกรอง — ชื่อและสีมาจาก CLAIM_STATUS ใน ui.js (ชุดเดียวกับ V3)
-const STATUS = { draft: CLAIM_STATUS.draft, submitted: CLAIM_STATUS.submitted };
-const EDITABLE = ['draft']; // API ตอบ 409 INVALID_STATE ถ้าไม่ใช่ draft
+
+const STATUS = CLAIM_STATUS;
+const EDITABLE = ['draft', 'returned']; // API ตอบ 409 INVALID_STATE ถ้าแก้สถานะอื่น
 const ROLE_TH = { instructor: 'อาจารย์', ta: 'ผู้ช่วยสอน', student_helper: 'นักศึกษาช่วยงาน' };
+const KIND_TH = { regular: 'ตาราง', makeup: 'ชดเชย', manual: 'เพิ่มเอง', cancelled: 'งดสอน' };
+const TYPE_TH = { lecture: 'ภาคทฤษฎี', lab: 'ภาคปฏิบัติ' };
 
 const $ = (id) => document.getElementById(id);
-const statusBadge = (s, printMethod) => chip(s, printMethod);
-const baht = (n) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }) + ' บาท';
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('th-TH', { dateStyle: 'medium' }) : '-');
+const baht = (n) => num(n) + ' บาท';
 const termLabel = (t) => { const [s, y] = String(t || '').split('-'); return y ? `${s}/${y}` : (t || '-'); }; // '1-2569' → '1/2569'
-const cycleLabel = (n) => (n ? `รอบที่ ${n}` : '-');
-// 1 คำขอ = 1 วิชา → รหัสวิชาอ่านจาก item แรก
-const courseOf = (c) => (c.items || []).find((x) => x.courseCode)?.courseCode || '';
-// ชื่อไฟล์จาก file key เช่น uploads/12345-file.pdf → file.pdf
-const fileNameOf = (k) => String(k || '').split('/').pop().replace(/^\d+-/, '');
+// 'CS262' / 'CS262 Lab' (คาบปฏิบัติของ TA) ; งานของนักศึกษาช่วยงานไม่มีรหัสวิชา → ใช้ชื่องาน
+const courseShort = (c) => (c.courseId ? `${c.courseId}${c.type === 'lab' ? ' Lab' : ''}` : (c.courseName || '-'));
+// 'CS262 · 650001'
+const courseSec = (c) => [courseShort(c), c.section].filter(Boolean).join(' · ');
+// 'CS262 INTRODUCTION TO SOFTWARE TESTING'
+const courseFull = (c) => [c.courseId, c.courseName].filter(Boolean).join(' ');
+const rateOf = (rates, role) => (rates || []).find((r) => r.role === role) || {};
+const sumHours = (items) => Math.round((items || []).reduce((s, x) => s + Number(x.hours || 0), 0) * 100) / 100;
 
-// แสดง error ตาม error.code
-function showError(err, el, retry) {
-  const text = {
+/* ---------- เพดานชั่วโมง (compensation_rules.maxHoursPerTerm) ----------
+   อาจารย์: เพดานต่อวิชาต่อภาค ; TA และนักศึกษาช่วยงาน: เพดานรวมทุกวิชาในภาค (ครึ่ง Load ใช้ maxHoursHalfLoad)
+   load มาจาก user_information.load (ไม่มีใน token ตอนนี้ → ถือว่าเต็ม Load) */
+const perCourseCap = (role) => role === 'instructor';
+const capOf = (rates, role, load) => {
+  const r = rateOf(rates, role);
+  return load === 'half' && r.maxHoursHalfLoad ? r.maxHoursHalfLoad : (r.maxHours || 0);
+};
+const LOAD_TH = { full: 'เต็ม Load', half: 'ครึ่ง Load' };
+const COUNTED = ['submitted', 'approved', 'documents_received', 'sent_to_finance']; // นับเป็น "เบิกแล้ว"
+// ชั่วโมงที่ยื่นแล้วในภาคนี้ (ไม่นับร่าง ส่งกลับ ไม่อนุมัติ และคำขอที่กำลังแก้) — อาจารย์นับเฉพาะวิชานั้น
+function claimedHours(claims, { term, role, offeringId, except }) {
+  return Math.round(claims.filter((c) => c.term === term && COUNTED.includes(c.status) && c.claimId !== except &&
+    (!perCourseCap(role) || c.offeringId === offeringId)).reduce((s, c) => s + Number(c.totalHours || 0), 0) * 100) / 100;
+}
+
+// แสดง error ตาม error.code — 400 / 409 ใช้ข้อความจาก server เพราะบอกสาเหตุได้ตรงกว่า
+function errorText(err) {
+  return {
     VALIDATION_ERROR: err.message,
-    NOT_FOUND: 'ไม่พบคำขอนี้ ลองกลับไปที่รายการคำขอ',
-    INVALID_STATE: 'คำขอนี้ไม่อยู่ในสถานะที่แก้ไขหรือยื่นได้',
+    INVALID_STATE: err.message || 'คำขอนี้ไม่อยู่ในสถานะที่ทำรายการนี้ได้',
+    CONFLICT: err.message,
+    NOT_FOUND: 'ไม่พบข้อมูล ลองกลับไปที่หน้ารายการ',
+    FORBIDDEN: 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้',
+    NETWORK_ERROR: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
     UPLOAD_FAILED: err.message
-  }[err.code] || 'ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง';
-  const canRetry = retry && !['VALIDATION_ERROR', 'NOT_FOUND', 'INVALID_STATE'].includes(err.code);
-  el.innerHTML = alertBox('danger', 'ไม่สำเร็จ', text,
-    canRetry ? '<button type="button" class="btn danger sm" id="retry">ลองอีกครั้ง</button>' : '');
-  if (canRetry) $('retry').addEventListener('click', retry);
+  }[err.code] || `ระบบขัดข้อง${err.status ? ` (HTTP ${err.status})` : ''} กรุณาลองใหม่อีกครั้ง`;
+}
+const NO_RETRY = ['VALIDATION_ERROR', 'NOT_FOUND', 'INVALID_STATE', 'CONFLICT', 'FORBIDDEN'];
+
+function showError(err, el, retry) {
+  const canRetry = retry && !NO_RETRY.includes(err.code);
+  el.innerHTML = alertBox('danger', 'ไม่สำเร็จ', errorText(err),
+    canRetry ? '<button type="button" class="btn danger sm" data-retry>ลองอีกครั้ง</button>' : '');
+  if (canRetry) el.querySelector('[data-retry]').addEventListener('click', retry);
+  console.error(err);
+}
+
+// การ์ด error เต็มกล่อง (ST5) — ปุ่มลองอีกครั้งเรียก retry
+function showErrorState(el, title, err, retry) {
+  el.innerHTML = errorState(title, retry ? `${errorText(err).replace(/ กรุณาลองใหม่อีกครั้ง$/, '')} · ข้อมูลของคุณไม่หาย ลองใหม่อีกครั้ง หากยังไม่ได้ติดต่อเจ้าหน้าที่` : errorText(err), retry ? 'retryState' : '');
+  if (retry) el.querySelector('#retryState').addEventListener('click', retry);
   console.error(err);
 }
 
@@ -193,137 +282,381 @@ async function initPage(roles = REQUESTERS) {
   return user;
 }
 
-/* ---------- Mock (เก็บใน localStorage เพื่อให้ข้ามหน้าได้) ---------- */
+/* ====================================================================
+   Mock — จำลอง Lambda ตาม openapi.yaml (เก็บใน localStorage เพื่อให้ข้ามหน้าได้)
+   ข้อมูลตั้งต้นสร้างตามวันที่วันนี้ ให้มีคาบเดือนนี้ เดือนก่อน และคำขอหลายสถานะเสมอ
+   ==================================================================== */
 
-const mockCycles = () => [
-  { cycle: 1, description: 'ส่งเอกสารภายในวันที่ 5 ของเดือนถัดไป', lastDay: 5 },
-  { cycle: 2, description: 'ส่งเอกสารระหว่างวันที่ 6 ถึง 10', startDay: 6, lastDay: 10 }
+const MOCK_RATES = [ // ตามตัวอย่างใน openapi.yaml + compensation_rules.maxAmountPerDay ของนักศึกษาช่วยงาน
+  { role: 'instructor', ratePerHour: 1200, maxHours: 45, maxHoursHalfLoad: null },
+  { role: 'ta', ratePerHour: 420, maxHours: 45, maxHoursHalfLoad: 22.5 },
+  { role: 'student_helper', ratePerHour: 40, maxHours: 253, maxHoursHalfLoad: 127, maxAmountPerDay: 240 }
 ];
 
-const MOCK = {
-  terms: ['1-2569', '2-2569', '1-2568', '2-2568', '2-2567'].map((id) => ({
-    id, name: `ภาคการศึกษาที่ ${termLabel(id)}`, billingCycles: mockCycles()
-  })),
-  rates: [ // ตามตัวอย่างใน openapi.yaml
-    { role: 'instructor', ratePerHour: 1200, maxHours: 45, maxHoursHalfLoad: null },
-    { role: 'ta', ratePerHour: 420, maxHours: 45, maxHoursHalfLoad: 22.5 },
-    { role: 'student_helper', ratePerHour: 40, maxHours: 253, maxHoursHalfLoad: 127 }
+// วิชาของผู้ใช้ทดสอบแต่ละคน (course_offerings + ตารางสอนประจำ) — weekdays: 0 = อาทิตย์
+const MOCK_COURSES = {
+  instructor: [
+    { offeringId: 7, courseId: 'CS262', courseName: 'INTRODUCTION TO SOFTWARE TESTING', section: '650001', type: 'lecture', room: 'บร.2-213', weekdays: [1], start: '09:30', end: '12:30' },
+    { offeringId: 8, courseId: 'CS361', courseName: 'SOFTWARE ENGINEERING', section: '650002', type: 'lecture', room: 'บร.4-301', weekdays: [3], start: '13:30', end: '16:30' }
   ],
-  seed: [
-    // ภาค 1/2569 (ปัจจุบัน)
-    { id: 'c001', userId: 'stub-ta', role: 'ta', term: '1-2569', billingCycle: 1,
-      items: [{ date: '2026-09-15', courseCode: 'CS361', hours: 3, note: 'สอนปกติ' }],
-      attachments: ['uploads/1726100000-cs361-sep.pdf'], status: 'draft',
-      createdAt: '2026-09-16T08:00:00Z', updatedAt: '2026-09-16T08:00:00Z', submittedAt: null },
-    { id: 'c002', userId: 'stub-instructor', role: 'instructor', term: '1-2569', billingCycle: 2,
-      items: [{ date: '2026-09-03', courseCode: 'CS101', hours: 3, note: '' }, { date: '2026-09-10', courseCode: 'CS101', hours: 2.5, note: 'ชดเชย' }],
-      attachments: ['uploads/1726000000-timesheet.pdf'], status: 'submitted',
-      createdAt: '2026-09-11T09:00:00Z', updatedAt: '2026-09-12T10:20:00Z', submittedAt: '2026-09-12T10:20:00Z' },
-    { id: 'c004', userId: 'stub-instructor', role: 'instructor', term: '1-2569', billingCycle: 1,
-      items: [{ date: '2026-08-18', courseCode: 'CS261', hours: 3, note: 'สอนปกติ' }, { date: '2026-08-25', courseCode: 'CS261', hours: 3, note: 'สอนปกติ' }, { date: '2026-08-29', courseCode: 'CS261', hours: 1.5, note: 'ตรวจงาน' }],
-      attachments: ['uploads/1725500000-cs261-aug.pdf'], status: 'submitted',
-      createdAt: '2026-09-02T09:00:00Z', updatedAt: '2026-09-03T10:00:00Z', submittedAt: '2026-09-03T10:00:00Z' },
-
-    // ภาค 2/2568
-    { id: 'c003', userId: 'stub-ta', role: 'ta', term: '2-2568', billingCycle: 1,
-      items: [{ date: '2026-03-04', courseCode: 'CS261', hours: 2, note: '' }],
-      attachments: [], status: 'submitted',
-      createdAt: '2026-03-05T09:00:00Z', updatedAt: '2026-03-06T11:00:00Z', submittedAt: '2026-03-06T11:00:00Z' },
-    { id: 'c005', userId: 'stub-instructor', role: 'instructor', term: '2-2568', billingCycle: 2,
-      items: [{ date: '2026-04-07', courseCode: 'CS101', hours: 3, note: 'สอนปกติ' }, { date: '2026-04-21', courseCode: 'CS101', hours: 3, note: 'สอนปกติ' }],
-      attachments: ['uploads/1713000000-cs101-apr.pdf'], status: 'submitted',
-      createdAt: '2026-05-07T09:00:00Z', updatedAt: '2026-05-08T10:00:00Z', submittedAt: '2026-05-08T10:00:00Z' },
-
-    // ภาค 1/2568
-    { id: 'c006', userId: 'stub-ta', role: 'ta', term: '1-2568', billingCycle: 1,
-      items: [{ date: '2025-09-09', courseCode: 'CS361', hours: 3, note: '' }, { date: '2025-09-23', courseCode: 'CS361', hours: 2, note: 'ชดเชย' }],
-      attachments: [], status: 'submitted',
-      createdAt: '2025-10-02T09:00:00Z', updatedAt: '2025-10-03T10:00:00Z', submittedAt: '2025-10-03T10:00:00Z' },
-    { id: 'c007', userId: 'stub-instructor', role: 'instructor', term: '1-2568', billingCycle: 2,
-      items: [{ date: '2025-10-14', courseCode: 'CS101', hours: 4, note: 'สอนปกติ' }, { date: '2025-10-28', courseCode: 'CS101', hours: 3.5, note: '' }],
-      attachments: ['uploads/1730000000-cs101-oct.pdf'], status: 'submitted',
-      createdAt: '2025-11-07T09:00:00Z', updatedAt: '2025-11-08T10:00:00Z', submittedAt: '2025-11-08T10:00:00Z' },
-
-    // ภาค 2/2567
-    { id: 'c008', userId: 'stub-ta', role: 'ta', term: '2-2567', billingCycle: 1,
-      items: [{ date: '2025-02-11', courseCode: 'CS261', hours: 3, note: '' }],
-      attachments: [], status: 'submitted',
-      createdAt: '2025-03-03T09:00:00Z', updatedAt: '2025-03-04T10:00:00Z', submittedAt: '2025-03-04T10:00:00Z' },
-    { id: 'c009', userId: 'stub-instructor', role: 'instructor', term: '2-2567', billingCycle: 2,
-      items: [{ date: '2025-03-12', courseCode: 'CS361', hours: 2.5, note: 'สอนปกติ' }, { date: '2025-03-26', courseCode: 'CS361', hours: 2.5, note: '' }],
-      attachments: [], status: 'submitted',
-      createdAt: '2025-04-07T09:00:00Z', updatedAt: '2025-04-08T10:00:00Z', submittedAt: '2025-04-08T10:00:00Z' }
+  ta: [
+    { offeringId: 11, courseId: 'CS262', courseName: 'INTRODUCTION TO SOFTWARE TESTING', section: '650001', type: 'lab', room: 'บร.3-Lab 1', weekdays: [4], start: '13:30', end: '16:30', instructorName: 'ศ.ดร.สมชาย อยู่เย็น' },
+    { offeringId: 12, courseId: 'CS213', courseName: 'DATA STRUCTURES', section: '650001', type: 'lab', room: 'บร.3-Lab 2', weekdays: [2], start: '09:30', end: '11:30', instructorName: 'ผศ.ดร.วรรณา ใจงาม' }
   ],
-  load() {
-    try {
-      const raw = localStorage.getItem('mockClaimsV5');
-      if (raw !== null) return JSON.parse(raw) || [];
-      this.save(this.seed);
-    } catch { /* ใช้ seed ในหน่วยความจำแทน */ }
-    return JSON.parse(JSON.stringify(this.seed));
-  },
-  save(l) { try { localStorage.setItem('mockClaimsV5', JSON.stringify(l)); } catch { /* ข้าม */ } }
+  student_helper: [
+    { offeringId: 20, courseId: '', courseName: 'งานธุรการ สำนักงานโครงการ', section: '', type: 'lecture', room: 'บร.2-101', weekdays: [1, 3], start: '13:00', end: '17:00', instructorName: 'อ.สมชาย' }
+  ]
 };
 
+// ภาคการศึกษาของวันที่: ส.ค.–ธ.ค. = ภาค 1 ของปีนั้น, ม.ค.–พ.ค. = ภาค 2 ของปีก่อน, มิ.ย.–ก.ค. = ภาคฤดูร้อน
+function termOfDate(d) {
+  const m = d.getMonth() + 1, y = be(d.getFullYear());
+  if (m >= 8) return { academicYear: y, semester: 1 };
+  if (m <= 5) return { academicYear: y - 1, semester: 2 };
+  return { academicYear: y - 1, semester: 3 };
+}
+
+const MOCK = {
+  key: 'mockV3',
+  load() {
+    try { const raw = localStorage.getItem(this.key); if (raw) return JSON.parse(raw); } catch { /* ใช้ข้อมูลใหม่ */ }
+    return { owners: {}, schedule: [], workDays: [], claims: [], actions: [], seq: { history: 100, work: 500, claim: 96 } };
+  },
+  save(db) { try { localStorage.setItem(this.key, JSON.stringify(db)); } catch { /* ข้าม */ } }
+};
+
+const mockNow = () => new Date().toISOString();
+const daysOfMonth = (ym) => { const d = parseMonth(ym), out = []; while (isoMonth(d) === ym) { out.push(isoDate(d)); d.setDate(d.getDate() + 1); } return out; };
+const nthWeekday = (ym, wd, n) => daysOfMonth(ym).filter((s) => parseDay(s).getDay() === wd)[n - 1];
+const claimNo = (db) => { db.seq.claim += 1; return `${String(be(new Date().getFullYear())).slice(2)}-${String(db.seq.claim).padStart(4, '0')}`; };
+
+// สร้างข้อมูลตั้งต้นของผู้ใช้ครั้งแรกที่เรียก (ตามบทบาท)
+function mockSeed(db, owner, role, me) {
+  if (db.owners[owner]) return;
+  db.owners[owner] = role;
+  const courses = MOCK_COURSES[role] || [];
+  const p = periodFromDate();
+  const m0 = p.claimMonth, m1 = addMonths(m0, -1), m2 = addMonths(m0, -2);
+  const months = [m2, m1, m0, addMonths(m0, 1), addMonths(m0, 2)];
+  const today = todayIso();
+  const who = `${me.name || ''} ${me.lastName || ''}`.trim() || role;
+
+  // คาบปกติทุกสัปดาห์ (อาจารย์ / TA) หรือวันทำงานที่ผ่านมาแล้ว (นักศึกษาช่วยงาน)
+  courses.forEach((c) => {
+    months.forEach((ym) => daysOfMonth(ym).forEach((day) => {
+      if (!c.weekdays.includes(parseDay(day).getDay())) return;
+      if (role === 'student_helper') {
+        if (day >= today) return;
+        db.workDays.push({ workId: ++db.seq.work, owner, offeringId: c.offeringId, workDate: day, startTime: c.start, endTime: c.end, hours: hoursBetween(c.start, c.end), Remark: '', claimId: null });
+      } else {
+        db.schedule.push({ historyId: ++db.seq.history, owner, offeringId: c.offeringId, courseId: c.courseId, courseName: c.courseName, section: c.section, type: c.type, room: c.room, instructorName: c.instructorName || '', date: day, startTime: c.start, endTime: c.end, kind: 'regular', description: '' });
+      }
+    }));
+  });
+
+  // งดสอน + สอนชดเชย: เดือนก่อน (คาบวันพุธที่ 3) และเดือนนี้ (คาบวันจันทร์ที่ 2)
+  const exception = (course, ym, wd, n, why) => {
+    const day = nthWeekday(ym, wd, n);
+    const row = db.schedule.find((s) => s.owner === owner && s.offeringId === course.offeringId && s.date === day);
+    if (!row) return null;
+    Object.assign(row, { kind: 'cancelled', description: why });
+    if (role === 'instructor') {
+      const sat = isoDate(new Date(parseDay(day).getTime() + (6 - parseDay(day).getDay()) * 86400000));
+      db.schedule.push({ ...row, historyId: ++db.seq.history, date: sat, kind: 'makeup', description: `สอนชดเชยคาบวันที่ ${thDate(day, false)}` });
+    }
+    return row;
+  };
+  if (role === 'instructor') { exception(courses[1], m1, 3, 3, 'กิจกรรมมหาวิทยาลัย'); exception(courses[0], m0, 1, 2, 'ติดประชุมวิชาการ'); }
+  if (role === 'ta') exception(courses[0], m1, 4, 3, 'กิจกรรมมหาวิทยาลัย');
+
+  // คำขอหลายสถานะ: [course, เดือน, สถานะ, ช่องทาง]
+  const plan = {
+    instructor: [[0, m2, 'sent_to_finance', 'sign_with_staff'], [1, m2, 'documents_received', 'self_print'], [0, m1, 'approved', 'sign_with_staff'], [1, m1, 'returned', 'sign_with_staff']],
+    ta: [[0, m2, 'sent_to_finance', 'self_print'], [0, m1, 'draft', null], [1, m1, 'submitted', 'self_print']],
+    student_helper: [[0, m2, 'sent_to_finance', 'sign_with_staff'], [0, m1, 'submitted', 'sign_with_staff']]
+  }[role] || [];
+  const at = (ym, day, hh) => new Date(`${addMonths(ym, 1)}-${pad2(day)}T${pad2(hh)}:${pad2(10 + day)}:00`).toISOString();
+  plan.forEach(([ci, ym, status, pm]) => {
+    const c = courses[ci];
+    let items = mockItemsFor(db, owner, role, c, ym);
+    // คำขอที่ถูกส่งกลับ: ผู้ใช้เผลอใส่คาบวันงดสอนเป็นคาบปกติ → เจ้าหน้าที่ติ๊กแถวนั้น
+    let flagged = [], note = null;
+    if (status === 'returned') {
+      const off = db.schedule.find((s) => s.owner === owner && s.offeringId === c.offeringId && s.kind === 'cancelled' && s.date.startsWith(ym));
+      items = items.filter((x) => x.kind !== 'makeup');
+      if (off) {
+        const w = { workId: ++db.seq.work, workDate: off.date, startTime: off.startTime, endTime: off.endTime, hours: hoursBetween(off.startTime, off.endTime), Remark: '', kind: 'regular' };
+        items = [...items, w].sort((a, b) => a.workDate.localeCompare(b.workDate));
+        flagged = [w.workId];
+        note = `วันที่ ${thDate(off.date, false)} เป็นวันงดการเรียนการสอน กรุณาลบคาบนี้ หรือระบุวันสอนชดเชยแทน`;
+      }
+    }
+    const t = termOfDate(parseDay(ym + '-01'));
+    const claim = {
+      claimId: claimNo(db), owner, role, status, printMethod: pm,
+      offeringId: c.offeringId, courseId: c.courseId, courseName: c.courseName, section: c.section, type: c.type, room: c.room, instructorName: c.instructorName || '',
+      ...t, month: ym, cycle: 1, deadline: `${addMonths(ym, 1)}-05`,
+      dayClaim: status === 'draft' ? null : `${addMonths(ym, 1)}-03`,
+      revision: status === 'draft' ? 0 : 1, items, flaggedWorkIds: flagged, returnNote: note,
+      returnedBy: note ? 'คุณวิภา ใจดี (จนท.)' : null, returnedAt: note ? at(ym, 4, 13) : null,
+      createdAt: at(ym, 3, 10), updatedAt: at(ym, 4, 14), submittedAt: status === 'draft' ? null : at(ym, 3, 10)
+    };
+    db.claims.push(claim);
+    const log = (action, from, to, actor, hh, day = 3, n = null) => db.actions.push({ claimId: claim.claimId, action, fromStatus: from, toStatus: to, actor, note: n, createdAt: at(ym, day, hh) });
+    log('autofill', null, 'draft', who, 9, 3);
+    if (status === 'draft') return;
+    log('submitted', 'draft', 'submitted', who, 10);
+    const staff = 'คุณวิภา (จนท.)';
+    if (status === 'returned') log('returned', 'submitted', 'returned', staff, 13, 4, note);
+    if (['approved', 'documents_received', 'sent_to_finance'].includes(status)) log('approved', 'submitted', 'approved', staff, 14, 4);
+    if (['documents_received', 'sent_to_finance'].includes(status)) log('documents_received', 'approved', 'documents_received', staff, 10, 5);
+    if (status === 'sent_to_finance') log('sent_to_finance', 'documents_received', 'sent_to_finance', staff, 15, 8);
+  });
+}
+
+// รายการคาบของคำขอจากปฏิทิน: คาบปกติ + สอนชดเชย (ไม่รวมงดสอน) ; นักศึกษาช่วยงานใช้วันทำงาน
+function mockItemsFor(db, owner, role, c, ym) {
+  if (role === 'student_helper') {
+    return db.workDays.filter((w) => w.owner === owner && w.offeringId === c.offeringId && w.workDate.startsWith(ym))
+      .map((w) => ({ workId: ++db.seq.work, workDate: w.workDate, startTime: w.startTime, endTime: w.endTime, hours: w.hours, Remark: w.Remark || '', kind: 'regular' }));
+  }
+  return db.schedule.filter((s) => s.owner === owner && s.offeringId === c.offeringId && s.date.startsWith(ym) && s.kind !== 'cancelled')
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((s) => ({ workId: ++db.seq.work, workDate: s.date, startTime: s.startTime, endTime: s.endTime, hours: hoursBetween(s.startTime, s.endTime), Remark: s.kind === 'makeup' ? `สอนชดเชย (${s.room})`.slice(0, 50) : '', kind: s.kind }));
+}
+
 // เติมยอดรวมแบบเดียวกับที่ server ส่งกลับ
-function view(c) {
-  const rate = MOCK.rates.find((r) => r.role === c.role)?.ratePerHour || 0;
-  const totalHours = Math.round(c.items.reduce((s, x) => s + x.hours, 0) * 100) / 100;
-  return { ...c, totalHours, totalAmount: totalHours * rate };
+function mockView(c) {
+  const rate = rateOf(MOCK_RATES, c.role).ratePerHour || 0;
+  const { owner, ...rest } = c;
+  const totalHours = sumHours(c.items);
+  return JSON.parse(JSON.stringify({ ...rest, ratePerHour: rate, totalHours, totalAmount: Math.round(totalHours * rate * 100) / 100 }));
 }
 
 async function mockRequest(method, path, body) {
   await new Promise((r) => setTimeout(r, 250));
   const url = new URL(path, 'http://mock'), p = url.pathname, q = url.searchParams;
-  const list = MOCK.load();
-  const bad = (m) => new ApiError('VALIDATION_ERROR', m, 400);
+  // ทดสอบหน้า error (ST5 / ST6): localStorage.setItem('mockFail', '/pdf') → ทุก route ที่มีข้อความนี้ตอบ 503
+  let fail = null;
+  try { fail = localStorage.getItem('mockFail'); } catch { /* ข้าม */ }
+  if (fail && p.includes(fail)) throw new ApiError('INTERNAL_ERROR', 'Service Unavailable', 503);
   // เหมือน server V3: ผู้ใช้มาจาก token ไม่ใช่จาก body (โหมด mock ใช้ sub ของ auth.stub.js)
   const me = await currentUser();
   if (!me?.role) throw new ApiError('UNAUTHORIZED', 'กรุณาเข้าสู่ระบบ', 401);
-  const owner = me.sub || me.role;
-  const check = (b) => {
-    if (!b || !b.term || !b.billingCycle || !Array.isArray(b.items)) throw bad('ข้อมูลไม่ครบ');
-    b.items.forEach((x) => { if (!x.date || !(Number(x.hours) > 0)) throw bad('hours ต้องมากกว่า 0'); });
-    if (new Set(b.items.map((x) => x.courseCode || '')).size > 1) throw bad('คำขอ 1 ฉบับเบิกได้ 1 วิชา');
-  };
-  const clean = (b) => ({
-    userId: owner, role: me.role, term: b.term, billingCycle: Number(b.billingCycle),
-    items: b.items.map((x) => ({ date: x.date, courseCode: x.courseCode || '', hours: Number(x.hours), note: x.note || '' })),
-    attachments: b.attachments || []
-  });
+  const owner = me.sub || me.role, role = me.role;
+  const db = MOCK.load();
+  mockSeed(db, owner, role, me);
+  const done = (data) => { MOCK.save(db); return JSON.parse(JSON.stringify(data ?? null)); };
+  const bad = (m) => new ApiError('VALIDATION_ERROR', m, 400);
+  const conflict = (m) => new ApiError('INVALID_STATE', m, 409);
+  const notFound = (m = 'ไม่พบข้อมูล') => new ApiError('NOT_FOUND', m, 404);
+  const myCourses = MOCK_COURSES[role] || [];
+  const findCourse = (b) => myCourses.find((c) => (b.offeringId && c.offeringId === Number(b.offeringId)) || (!b.offeringId && c.courseId === b.courseId && (!b.type || c.type === b.type)));
+  const monthLocked = (offeringId, ym) => db.claims.some((c) => c.owner === owner && c.offeringId === offeringId && c.month === ym && !['draft', 'returned', 'rejected'].includes(c.status));
 
-  if (p === '/terms') return MOCK.terms;
-  if (p === '/rates') return MOCK.rates;
-  if (p === '/uploads/presigned-url') return { uploadUrl: null, fileKey: `uploads/${Date.now()}-${q.get('fileName')}` };
+  if (p === '/rates') return done(MOCK_RATES);
+  if (p === '/terms') {
+    // ภาคปัจจุบันย้อนหลัง 4 ภาค (ไม่นับภาคฤดูร้อน)
+    let { semester: s, academicYear: y } = termOfDate(new Date());
+    if (s === 3) s = 2;
+    const out = [];
+    for (let i = 0; i < 4; i++) { out.push({ id: `${s}-${y}` }); if (s === 1) { s = 2; y -= 1; } else s = 1; }
+    return done(out);
+  }
+  if (p === '/current-period') {
+    const per = periodFromDate();
+    return done({ ...termOfDate(parseMonth(per.claimMonth)), ...per });
+  }
+
+  /* ----- ปฏิทินคาบสอน ----- */
+  if (p === '/schedule' && method === 'GET') {
+    const ym = q.get('month');
+    if (!/^\d{4}-\d{2}$/.test(ym || '')) throw bad('month ต้องเป็นรูปแบบ YYYY-MM');
+    const periods = db.schedule.filter((s) => s.owner === owner && s.date.startsWith(ym)).map(({ owner: _, ...s }) => s);
+    const summary = [];
+    periods.filter((s) => s.kind !== 'cancelled').forEach((s) => {
+      let row = summary.find((x) => x.offeringId === s.offeringId);
+      if (!row) summary.push(row = { offeringId: s.offeringId, courseId: s.courseId, periods: 0, hours: 0 });
+      row.periods += 1; row.hours += hoursBetween(s.startTime, s.endTime);
+    });
+    const courses = myCourses.map(({ weekdays, start, end, ...c }) => ({ ...c, weekdays, startTime: start, endTime: end }));
+    return done({ month: ym, periods, summary, courses });
+  }
+  const sch = p.match(/^\/schedule(?:\/(\d+))?$/);
+  if (sch) {
+    const checkBody = (b, isNew) => {
+      if (!['regular', 'cancelled', 'makeup'].includes(b?.kind)) throw bad('kind ต้องเป็น regular, cancelled หรือ makeup');
+      const c = findCourse(b);
+      if (!c) throw bad('ไม่พบรายวิชานี้ในภาคการศึกษาปัจจุบัน');
+      const [d1, t1] = String(b.startTime || '').split('T'), [d2, t2] = String(b.endTime || '').split('T');
+      if (!d1 || !t1 || d1 !== d2) throw bad('startTime / endTime ต้องเป็น ISO 8601 ของวันเดียวกัน');
+      if (hoursBetween(t1, t2) <= 0) throw bad('เวลาสิ้นสุดต้องหลังเวลาเริ่ม');
+      if (isNew && b.repeatUntil && b.repeatUntil < d1) throw bad('repeatUntil ต้องไม่ก่อนวันของคาบแรก');
+      return { c, date: d1, startTime: hhmm(t1), endTime: hhmm(t2) };
+    };
+    // เวลาทับคาบอื่นของผู้ใช้ (ข้ามวิชา) — คาบงดสอนไม่นับ
+    const overlap = (date, a, b, skipId) => db.schedule.find((s) => s.owner === owner && s.historyId !== skipId && s.date === date && s.kind !== 'cancelled' && toMin(a) < toMin(s.endTime) && toMin(s.startTime) < toMin(b));
+    if (method === 'POST' && !sch[1]) {
+      const v = checkBody(body, true);
+      const dates = [v.date];
+      if (body.repeatUntil) { const d = parseDay(v.date); for (;;) { d.setDate(d.getDate() + 7); if (isoDate(d) > body.repeatUntil) break; dates.push(isoDate(d)); } }
+      const rows = dates.map((date) => {
+        const o = body.kind !== 'cancelled' && overlap(date, v.startTime, v.endTime);
+        if (o) throw conflict(`เวลาทับกับคาบ ${o.courseId} วันที่ ${thDate(date)} ${timeRange(o.startTime, o.endTime)}`);
+        if (monthLocked(v.c.offeringId, date.slice(0, 7))) throw conflict(`ยื่นคำขอของ ${courseShort(v.c)} เดือน ${thMonth(date.slice(0, 7))} แล้ว เพิ่มคาบไม่ได้`);
+        return { historyId: ++db.seq.history, owner, offeringId: v.c.offeringId, courseId: v.c.courseId, courseName: v.c.courseName, section: v.c.section, type: body.type || v.c.type, room: body.room || '', instructorName: v.c.instructorName || '', date, startTime: v.startTime, endTime: v.endTime, kind: body.kind, description: body.description || '' };
+      });
+      db.schedule.push(...rows);
+      return done(rows.map(({ owner: _, ...r }) => r));
+    }
+    const row = db.schedule.find((s) => s.owner === owner && s.historyId === Number(sch[1]));
+    if (!row) throw notFound('ไม่พบคาบนี้');
+    if (monthLocked(row.offeringId, row.date.slice(0, 7))) throw conflict('ยื่นคำขอของเดือนนี้แล้ว แก้ไขหรือลบคาบไม่ได้');
+    if (method === 'DELETE') { db.schedule.splice(db.schedule.indexOf(row), 1); return done({ historyId: row.historyId }); }
+    if (method === 'PUT') {
+      const v = checkBody(body, false);
+      const o = body.kind !== 'cancelled' && overlap(v.date, v.startTime, v.endTime, row.historyId);
+      if (o) throw conflict(`เวลาทับกับคาบ ${o.courseId} ${timeRange(o.startTime, o.endTime)}`);
+      Object.assign(row, { offeringId: v.c.offeringId, courseId: v.c.courseId, courseName: v.c.courseName, section: v.c.section, type: body.type || row.type, room: body.room ?? row.room, date: v.date, startTime: v.startTime, endTime: v.endTime, kind: body.kind, description: body.description || '' });
+      const { owner: _, ...r } = row;
+      return done(r);
+    }
+  }
+
+  /* ----- ปฏิทินงาน (นักศึกษาช่วยงาน) ----- */
+  if (p === '/work-days' && method === 'GET') {
+    const ym = q.get('month');
+    const items = db.workDays.filter((w) => w.owner === owner && w.workDate.startsWith(ym || '')).map(({ owner: _, ...w }) => {
+      const c = myCourses.find((x) => x.offeringId === w.offeringId) || {};
+      return { ...w, courseName: c.courseName || '' };
+    });
+    const courses = myCourses.map(({ weekdays, start, end, ...c }) => ({ ...c, weekdays, startTime: start, endTime: end }));
+    return done({ items, courses });
+  }
+  const wd = p.match(/^\/work-days(?:\/(\d+))?$/);
+  if (wd) {
+    const checkWork = (b) => {
+      const c = findCourse(b);
+      if (!c) throw bad('ไม่พบงานนี้ในภาคการศึกษาปัจจุบัน');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(b.workDate || '')) throw bad('workDate ต้องเป็นวันที่ YYYY-MM-DD');
+      const h = hoursBetween(b.startTime, b.endTime);
+      if (h <= 0) throw bad('เวลาออกต้องหลังเวลาเข้า');
+      if (String(b.Remark || '').length > 50) throw bad('หมายเหตุต้องไม่เกิน 50 ตัวอักษร');
+      return { c, h };
+    };
+    const overlapW = (b, skip) => db.workDays.find((w) => w.owner === owner && w.workId !== skip && w.workDate === b.workDate && toMin(b.startTime) < toMin(w.endTime) && toMin(w.startTime) < toMin(b.endTime));
+    if (method === 'POST' && !wd[1]) {
+      const v = checkWork(body);
+      if (overlapW(body)) throw conflict('มีเวลาทำงานทับกันในวันนี้แล้ว');
+      if (monthLocked(v.c.offeringId, body.workDate.slice(0, 7))) throw conflict('ยื่นคำขอของเดือนนี้แล้ว เพิ่มวันทำงานไม่ได้');
+      const w = { workId: ++db.seq.work, owner, offeringId: v.c.offeringId, workDate: body.workDate, startTime: hhmm(body.startTime), endTime: hhmm(body.endTime), hours: v.h, Remark: body.Remark || '', claimId: null };
+      db.workDays.push(w);
+      const { owner: _, ...r } = w;
+      return done(r);
+    }
+    const w = db.workDays.find((x) => x.owner === owner && x.workId === Number(wd[1]));
+    if (!w) throw notFound('ไม่พบวันทำงานนี้');
+    if (monthLocked(w.offeringId, w.workDate.slice(0, 7))) throw conflict('ยื่นคำขอของเดือนนี้แล้ว แก้ไขหรือลบไม่ได้');
+    if (method === 'DELETE') { db.workDays.splice(db.workDays.indexOf(w), 1); return done({ workId: w.workId }); }
+    if (method === 'PUT') {
+      const v = checkWork(body);
+      if (overlapW(body, w.workId)) throw conflict('มีเวลาทำงานทับกันในวันนี้แล้ว');
+      Object.assign(w, { offeringId: v.c.offeringId, workDate: body.workDate, startTime: hhmm(body.startTime), endTime: hhmm(body.endTime), hours: v.h, Remark: body.Remark || '' });
+      const { owner: _, ...r } = w;
+      return done(r);
+    }
+  }
+
+  /* ----- คำขอ ----- */
+  const mine = (id) => {
+    const c = db.claims.find((x) => x.claimId === decodeURIComponent(id) && x.owner === owner); // คำขอของคนอื่น = ไม่พบ
+    if (!c) throw notFound('ไม่พบคำขอ');
+    return c;
+  };
+  const checkItems = (items, ym) => {
+    if (!Array.isArray(items)) throw bad('items ต้องเป็น array');
+    items.forEach((x, i) => {
+      if (!String(x.workDate || '').startsWith(ym)) throw bad(`แถวที่ ${i + 1}: วันที่ต้องอยู่ในเดือน ${thMonth(ym)}`);
+      if (!(hoursBetween(x.startTime, x.endTime) > 0)) throw bad(`แถวที่ ${i + 1}: เวลาสิ้นสุดต้องหลังเวลาเริ่ม`);
+      if (String(x.Remark || '').length > 50) throw bad(`แถวที่ ${i + 1}: หมายเหตุต้องไม่เกิน 50 ตัวอักษร`);
+    });
+    return items.map((x) => ({ workId: x.workId || ++db.seq.work, workDate: x.workDate, startTime: hhmm(x.startTime), endTime: hhmm(x.endTime), hours: hoursBetween(x.startTime, x.endTime), Remark: x.Remark || '', kind: x.kind || 'manual' }));
+  };
+  const log = (c, action, from, to, n = null) => db.actions.push({ claimId: c.claimId, action, fromStatus: from, toStatus: to, actor: `${me.name || ''} ${me.lastName || ''}`.trim() || role, note: n, createdAt: mockNow() });
+  const newClaim = (c, ym, items) => {
+    const per = periodFromDate();
+    const now = mockNow();
+    return {
+      claimId: claimNo(db), owner, role, status: 'draft', printMethod: null,
+      offeringId: c.offeringId, courseId: c.courseId, courseName: c.courseName, section: c.section, type: c.type, room: c.room, instructorName: c.instructorName || '',
+      ...termOfDate(parseMonth(ym)), month: ym, cycle: per.cycle, deadline: per.deadline, dayClaim: null, revision: 0,
+      items, flaggedWorkIds: [], returnNote: null, createdAt: now, updatedAt: now, submittedAt: null
+    };
+  };
+  const dup = (offeringId, ym) => db.claims.find((c) => c.owner === owner && c.offeringId === offeringId && c.month === ym && c.status !== 'rejected');
 
   if (p === '/claims' && method === 'GET') {
-    return list.filter((c) =>
-      c.userId === owner &&
-      (!q.get('status') || c.status === q.get('status')) &&
-      (!q.get('term') || c.term === q.get('term'))).map(view);
+    return done(db.claims.filter((c) => c.owner === owner && (!q.get('status') || c.status === q.get('status'))).map(mockView));
+  }
+  if (p === '/claims/autofill' && method === 'POST') {
+    const c = findCourse(body || {}), ym = body?.month;
+    if (!c || !/^\d{4}-\d{2}$/.test(ym || '')) throw bad('ต้องระบุ offeringId และ month (YYYY-MM)');
+    const d = dup(c.offeringId, ym);
+    if (d) throw conflict(`มีคำขอ #${d.claimId} ของวิชานี้ในเดือนนี้แล้ว`);
+    const items = mockItemsFor(db, owner, role, c, ym);
+    if (!items.length) return done({ claimId: null, items: [] });
+    const claim = newClaim(c, ym, items);
+    db.claims.push(claim);
+    log(claim, 'autofill', null, 'draft', `${items.length} คาบ`);
+    return done(mockView(claim));
   }
   if (p === '/claims' && method === 'POST') {
-    check(body);
-    const n = Math.max(0, ...list.map((c) => Number(String(c.id).replace(/\D/g, '')) || 0)) + 1;
-    const now = new Date().toISOString();
-    const c = { id: 'c' + String(n).padStart(3, '0'), ...clean(body), status: 'draft', createdAt: now, updatedAt: now, submittedAt: null };
-    MOCK.save([c, ...list]);
-    return view(c);
+    const c = findCourse(body || {}), ym = body?.month;
+    if (!c || !/^\d{4}-\d{2}$/.test(ym || '')) throw bad('ต้องระบุ offeringId และ month (YYYY-MM)');
+    const d = dup(c.offeringId, ym);
+    if (d) throw conflict(`มีคำขอ #${d.claimId} ของวิชานี้ในเดือนนี้แล้ว`);
+    const claim = newClaim(c, ym, checkItems(body.items || [], ym));
+    db.claims.push(claim);
+    log(claim, 'created', null, 'draft');
+    return done(mockView(claim));
   }
 
-  const m = p.match(/^\/claims\/([^/]+)(\/submit)?$/);
-  if (m) {
-    const c = list.find((x) => x.id === decodeURIComponent(m[1]) && x.userId === owner); // คำขอของคนอื่น = ไม่พบ
-    if (!c) throw new ApiError('NOT_FOUND', 'ไม่พบคำขอ', 404);
-    if (method === 'GET') return view(c);
-    if (!EDITABLE.includes(c.status)) throw new ApiError('INVALID_STATE', 'คำขอนี้ถูกยื่นแล้ว ไม่สามารถแก้ไขได้', 409);
-    const now = new Date().toISOString();
-    if (m[2]) {
-      if (!c.items.length) throw bad('กรุณาเพิ่มรายการงานอย่างน้อย 1 รายการ');
-      Object.assign(c, { status: 'submitted', submittedAt: now, updatedAt: now });
-    } else { check(body); Object.assign(c, clean(body), { updatedAt: now }); }
-    MOCK.save(list);
-    return view(c);
+  const cm = p.match(/^\/claims\/([^/]+)(?:\/(submit|print-method|actions|pdf))?$/);
+  if (cm) {
+    const c = mine(cm[1]), sub = cm[2], now = mockNow();
+    if (!sub && method === 'GET') return done(mockView(c));
+    if (sub === 'actions') return done(db.actions.filter((a) => a.claimId === c.claimId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    if (sub === 'pdf') {
+      const type = role === 'student_helper' && q.get('type') === 'claim' ? 'blank' : (q.get('type') || 'claim');
+      if (type === 'makeup') log(c, 'makeup_form', null, null, q.get('note') || null);
+      else if (['approved', 'documents_received', 'sent_to_finance'].includes(c.status)) log(c, 'downloaded', null, null);
+      else if (c.status === 'draft' || c.status === 'returned') log(c, 'preview', null, null);
+      return done({ downloadUrl: null, expiresIn: 300, type });
+    }
+    if (!sub && method === 'PUT') {
+      if (!EDITABLE.includes(c.status)) throw conflict('คำขอนี้ถูกยื่นแล้ว ไม่สามารถแก้ไขได้');
+      c.items = checkItems(body?.items, c.month);
+      c.updatedAt = now;
+      return done(mockView(c));
+    }
+    if (sub === 'submit') {
+      if (!['sign_with_staff', 'self_print'].includes(body?.printMethod)) throw bad('กรุณาเลือกช่องทางยื่น');
+      if (!EDITABLE.includes(c.status)) throw conflict('คำขอนี้ถูกยื่นแล้ว');
+      if (!c.items.length) throw bad('กรุณาเลือกคาบอย่างน้อย 1 คาบ');
+      const from = c.status;
+      const per = periodFromDate();
+      Object.assign(c, { status: 'submitted', printMethod: body.printMethod, submittedAt: now, updatedAt: now, dayClaim: todayIso(), revision: (c.revision || 0) + 1, cycle: per.cycle, deadline: per.deadline });
+      log(c, from === 'returned' ? 'resubmitted' : 'submitted', from, 'submitted', from === 'returned' ? (body.note || null) : null);
+      return done(mockView(c));
+    }
+    if (sub === 'print-method' && method === 'PUT') {
+      if (body?.printMethod !== 'sign_with_staff') throw bad('เปลี่ยนได้เฉพาะเป็น sign_with_staff');
+      if (c.status !== 'submitted' || c.printMethod !== 'self_print') throw conflict('เปลี่ยนช่องทางได้เฉพาะคำขอปริ้นเซ็นเองที่ยังรอตรวจ');
+      c.printMethod = 'sign_with_staff';
+      c.updatedAt = now;
+      log(c, 'print_method', null, null, 'เปลี่ยนเป็นเซ็นกับเจ้าหน้าที่');
+      return done(mockView(c));
+    }
   }
   throw new ApiError('NOT_FOUND', 'ไม่พบ route', 404);
 }
