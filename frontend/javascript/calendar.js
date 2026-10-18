@@ -1,7 +1,8 @@
 // calendar.js — ปฏิทินคาบสอน (Figma I2 อาจารย์ · I3 แก้ไขคาบ · T2 TA หลายวิชา · ST2 ปฏิทินว่าง) และปฏิทินงาน (S2 นักศึกษาช่วยงาน)
 // Input : อาจารย์ / TA → GET /schedule?month=YYYY-MM ; นักศึกษาช่วยงาน → GET /work-days?month=YYYY-MM
 // Output: ปฏิทินเดือน / สัปดาห์ (มือถือแสดงเป็นรายการรายวัน), กล่องสรุปเดือนนี้ที่ใช้ autofill คำขอ
-// เพิ่ม/แก้คาบ → POST /schedule (body ตาม V3-06: kind, courseId, type, startTime, endTime ISO 8601, room, description, repeatUntil?)
+// เพิ่ม/แก้คาบ → POST /schedule body = { courseId, sessionId, startTime, endTime (ISO 8601), room, description, repeatUntil? }
+//              description = ประเภทคาบ regular | cancelled | makeup (teaching_histories ไม่มีคอลัมน์ kind)
 //              PUT /schedule/{id} (ช่องเดียวกัน ไม่มี repeatUntil) · DELETE /schedule/{id}
 // วันทำงาน   → POST /work-days · PUT /work-days/{id} · DELETE /work-days/{id} (ลงเวลาวันนี้ใช้ route เดียวกัน)
 
@@ -235,17 +236,13 @@ function periodForm(e, date) {
     <div class="field"><label for="fCourse">วิชา</label>
       <select id="fCourse">${courses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(user.role === 'ta' ? courseSec(x) : courseFull(x))}</option>`).join('')}</select></div>
     <div class="field sys"><label for="fSec">Section</label><input id="fSec" value="${esc(c.section || '-')}" readonly></div>
-    <div class="field"><span class="lbl">ประเภท</span>
-      <div class="opts box">${radio('fType', 'lecture', 'ทฤษฎี', (e?.type || c.type) !== 'lab')}${radio('fType', 'lab', 'ปฏิบัติ', (e?.type || c.type) === 'lab')}</div></div>
-    <div class="field"><label for="fRoom">ห้อง</label><input id="fRoom" value="${esc(e?.room ?? c.room ?? '')}" maxlength="50"></div>
+    <div class="field full"><label for="fRoom">ห้อง</label><input id="fRoom" value="${esc(e?.room ?? c.room ?? '')}" maxlength="50"></div>
     <div class="field"><label for="fDate">วันที่</label><input type="date" id="fDate" value="${esc(e?.date || date || todayIso())}" required></div>
     <div class="field"><span class="lbl">เวลา</span>
       <div class="time2"><input type="time" id="fStart" aria-label="เวลาเริ่ม" value="${esc(e?.startTime || c.startTime || '09:00')}"><span>–</span><input type="time" id="fEnd" aria-label="เวลาสิ้นสุด" value="${esc(e?.endTime || c.endTime || '12:00')}"></div>
       <span class="hint" id="fHours"></span></div>
     <div class="field full"><span class="lbl">ประเภทคาบ</span>
       <div class="opts">${radio('fKind', 'regular', 'ตามตาราง', kind === 'regular')}${radio('fKind', 'makeup', 'สอนชดเชย', kind === 'makeup')}${radio('fKind', 'cancelled', 'งดสอน (ไม่นับชั่วโมง)', kind === 'cancelled')}</div></div>
-    <div class="field full"><label for="fDesc">หมายเหตุ / เหตุผล</label>
-      <input id="fDesc" maxlength="200" value="${esc(e?.description || '')}" placeholder="เช่น ติดประชุม, สอนชดเชยคาบวันที่ 16 ก.ย."></div>
     ${isNew ? `<div class="field full repeat">
       <label class="check"><input type="checkbox" id="fRepeat"> ใช้กับคาบนี้และทุกสัปดาห์ถัดไปในภาค</label>
       <div class="repeat-until" hidden><label for="fUntil">ถึงวันที่</label><input type="date" id="fUntil" value="${esc(termEndGuess())}">
@@ -289,7 +286,6 @@ async function openEditor(e, date) {
         const c = courses[q('#fCourse').value];
         if (q('#fSec')) q('#fSec').value = c.section || '-';
         if (q('#fRoom') && !q('#fRoom').value) q('#fRoom').value = c.room || '';
-        el.querySelector(`input[name="fType"][value="${c.type === 'lab' ? 'lab' : 'lecture'}"]`)?.click();
       });
       q('#fRepeat')?.addEventListener('change', () => { q('.repeat-until').hidden = !q('#fRepeat').checked; });
       // "ทุกสัปดาห์" ใช้ได้เฉพาะคาบตามตาราง (งดสอน / ชดเชย เป็นรายคาบ)
@@ -307,16 +303,17 @@ async function openEditor(e, date) {
         const body = { offeringId: c.offeringId, workDate: d, startTime: a, endTime: b, Remark: q('#fDesc').value.trim() };
         try { if (isNew) await api.createWorkDay(body); else await api.updateWorkDay(e.id, body); } catch (err) { throw new Error(errorText(err)); }
       } else {
+        // ตรงกับคอลัมน์ของ teaching_histories: ประเภทคาบ (regular / cancelled / makeup) เก็บในคอลัมน์ description
         const body = {
-          kind: el.querySelector('input[name="fKind"]:checked').value,
           courseId: c.courseId,
-          type: el.querySelector('input[name="fType"]:checked').value,
+          // session (โครงการ) ของวิชา จาก courses ใน GET /schedule — teaching_histories.sessionId บังคับมีค่า
+          ...(c.sessionId != null ? { sessionId: c.sessionId } : e?.sessionId != null ? { sessionId: e.sessionId } : {}),
           startTime: `${d}T${a}:00`,
           endTime: `${d}T${b}:00`,
           room: q('#fRoom').value.trim(),
-          description: q('#fDesc').value.trim()
+          description: el.querySelector('input[name="fKind"]:checked').value
         };
-        if (isNew && body.kind === 'regular' && q('#fRepeat')?.checked) {
+        if (isNew && body.description === 'regular' && q('#fRepeat')?.checked) {
           if (!q('#fUntil').value || q('#fUntil').value < d) throw new Error('วันที่สิ้นสุดต้องไม่ก่อนวันของคาบแรก');
           body.repeatUntil = q('#fUntil').value;
         }

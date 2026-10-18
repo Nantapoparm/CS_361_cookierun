@@ -8,7 +8,7 @@
 
 const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
-  USE_MOCK: false,
+  USE_MOCK: true,
   // URL ของ API Gateway (ไม่มี / ท้าย) อ่านจาก config.js ของคนที่ 1 ก่อน
   BASE_URL: window.APP_CONFIG?.apiBaseUrl || 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com'
 };
@@ -118,6 +118,10 @@ const normTerms = (list) => {
      items:[{ workId, workDate, startTime, endTime, hours, Remark, kind }], totalHours, totalAmount, ratePerHour,
      returnNote?, returnedAt?, returnedBy?, flaggedWorkIds?:[], createdAt, updatedAt, submittedAt } */
 
+// ประเภทคาบเก็บในคอลัมน์ teaching_histories.description (ไม่มีคอลัมน์ kind) — Lambda อาจส่งมาเป็น kind หรือ description
+const PERIOD_KINDS = ['regular', 'cancelled', 'makeup'];
+const kindOfPeriod = (p) => (PERIOD_KINDS.includes(p.kind) ? p.kind : PERIOD_KINDS.includes(String(p.description || '').trim().toLowerCase()) ? String(p.description).trim().toLowerCase() : 'regular');
+
 // เวลา ISO ('2026-09-07T09:30:00') หรือ 'HH:MM' → 'HH:MM' ; วันที่อ่านจาก date หรือจาก startTime ที่เป็น ISO
 function normPeriod(p) {
   const date = p.date || (String(p.startTime).includes('T') ? String(p.startTime).slice(0, 10) : '');
@@ -127,18 +131,19 @@ function normPeriod(p) {
     date,
     startTime: hhmm(p.startTime),
     endTime: hhmm(p.endTime),
-    kind: p.kind || 'regular',
+    kind: kindOfPeriod(p),
     type: p.type || 'lecture',
     room: p.room || '',
-    description: p.description ?? p.reason ?? ''
+    // description ที่เป็นชื่อประเภทคาบไม่ใช่ข้อความเหตุผล → ไม่แสดง
+    description: PERIOD_KINDS.includes(String(p.description || '').trim().toLowerCase()) ? '' : (p.description ?? p.reason ?? '')
   };
 }
 // ไม่มี courses ใน response → รวบรวมจากคาบที่ได้มา
 function coursesOf(periods) {
   const map = new Map();
   periods.forEach((p) => {
-    const key = p.offeringId ?? `${p.courseId}|${p.type}`;
-    if (!map.has(key)) map.set(key, { offeringId: p.offeringId, courseId: p.courseId, courseName: p.courseName || '', section: p.section || '', type: p.type, room: p.room, instructorName: p.instructorName || '' });
+    const key = p.offeringId ?? p.courseId;
+    if (!map.has(key)) map.set(key, { offeringId: p.offeringId, courseId: p.courseId, courseName: p.courseName || '', section: p.section || '', type: p.type, room: p.room, instructorName: p.instructorName || '', sessionId: p.sessionId });
   });
   return [...map.values()];
 }
@@ -151,8 +156,13 @@ const normClaim = (c) => (c ? {
 
 /* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
-  // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle? }
-  getCurrentPeriod: () => request('GET', '/current-period'),
+  // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle }
+  // คำนวณจากวันที่วันนี้ที่หน้าเว็บ (ทีมตัดสินใจไม่ทำ Lambda GET /current-period)
+  // รอบ 1 ส่งภายในวันที่ 5 / รอบ 2 วันที่ 6–10 ของเดือนถัดจากงาน ; ภาคการศึกษาคิดจากเดือนของงาน
+  getCurrentPeriod: async () => {
+    const p = periodFromDate();
+    return { ...termOfDate(parseMonth(p.claimMonth)), ...p };
+  },
 
   // ปฏิทินคาบสอน (อาจารย์ / TA) → { month, periods:[period], summary:[{courseId, periods, hours}], courses:[course] }
   getSchedule: async (month) => {
@@ -160,7 +170,8 @@ const api = {
     const periods = (d?.periods || []).map(normPeriod).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
     return { month, periods, summary: d?.summary || [], courses: d?.courses?.length ? d.courses : coursesOf(periods) };
   },
-  // body = { kind, courseId, type, startTime, endTime (ISO 8601), room, description, repeatUntil? (POST เท่านั้น) }
+  // body = { courseId, sessionId, startTime, endTime (ISO 8601), room, description = regular | cancelled | makeup, repeatUntil? (POST เท่านั้น) }
+  //        sessionId มาจาก courses[].sessionId ของ GET /schedule
   createSchedule:  (body)     => request('POST',   '/schedule', body),
   updateSchedule:  (id, body) => request('PUT',    `/schedule/${encodeURIComponent(id)}`, body),
   deleteSchedule:  (id)       => request('DELETE', `/schedule/${encodeURIComponent(id)}`),
@@ -551,20 +562,21 @@ async function mockRequest(method, path, body) {
       if (!row) summary.push(row = { offeringId: s.offeringId, courseId: s.courseId, periods: 0, hours: 0 });
       row.periods += 1; row.hours += hoursBetween(s.startTime, s.endTime);
     });
-    const courses = myCourses.map(({ weekdays, start, end, ...c }) => ({ ...c, weekdays, startTime: start, endTime: end }));
+    const courses = myCourses.map(({ weekdays, start, end, ...c }) => ({ ...c, sessionId: 1, weekdays, startTime: start, endTime: end }));
     return done({ month: ym, periods, summary, courses });
   }
   const sch = p.match(/^\/schedule(?:\/(\d+))?$/);
   if (sch) {
     const checkBody = (b, isNew) => {
-      if (!['regular', 'cancelled', 'makeup'].includes(b?.kind)) throw bad('kind ต้องเป็น regular, cancelled หรือ makeup');
+      const kind = b?.kind || b?.description;
+      if (!PERIOD_KINDS.includes(kind)) throw bad('description ต้องเป็น regular, cancelled หรือ makeup');
       const c = findCourse(b);
       if (!c) throw bad('ไม่พบรายวิชานี้ในภาคการศึกษาปัจจุบัน');
       const [d1, t1] = String(b.startTime || '').split('T'), [d2, t2] = String(b.endTime || '').split('T');
       if (!d1 || !t1 || d1 !== d2) throw bad('startTime / endTime ต้องเป็น ISO 8601 ของวันเดียวกัน');
       if (hoursBetween(t1, t2) <= 0) throw bad('เวลาสิ้นสุดต้องหลังเวลาเริ่ม');
       if (isNew && b.repeatUntil && b.repeatUntil < d1) throw bad('repeatUntil ต้องไม่ก่อนวันของคาบแรก');
-      return { c, date: d1, startTime: hhmm(t1), endTime: hhmm(t2) };
+      return { c, kind, date: d1, startTime: hhmm(t1), endTime: hhmm(t2) };
     };
     // เวลาทับคาบอื่นของผู้ใช้ (ข้ามวิชา) — คาบงดสอนไม่นับ
     const overlap = (date, a, b, skipId) => db.schedule.find((s) => s.owner === owner && s.historyId !== skipId && s.date === date && s.kind !== 'cancelled' && toMin(a) < toMin(s.endTime) && toMin(s.startTime) < toMin(b));
@@ -573,10 +585,10 @@ async function mockRequest(method, path, body) {
       const dates = [v.date];
       if (body.repeatUntil) { const d = parseDay(v.date); for (;;) { d.setDate(d.getDate() + 7); if (isoDate(d) > body.repeatUntil) break; dates.push(isoDate(d)); } }
       const rows = dates.map((date) => {
-        const o = body.kind !== 'cancelled' && overlap(date, v.startTime, v.endTime);
+        const o = v.kind !== 'cancelled' && overlap(date, v.startTime, v.endTime);
         if (o) throw conflict(`เวลาทับกับคาบ ${o.courseId} วันที่ ${thDate(date)} ${timeRange(o.startTime, o.endTime)}`);
         if (monthLocked(v.c.offeringId, date.slice(0, 7))) throw conflict(`ยื่นคำขอของ ${courseShort(v.c)} เดือน ${thMonth(date.slice(0, 7))} แล้ว เพิ่มคาบไม่ได้`);
-        return { historyId: ++db.seq.history, owner, offeringId: v.c.offeringId, courseId: v.c.courseId, courseName: v.c.courseName, section: v.c.section, type: body.type || v.c.type, room: body.room || '', instructorName: v.c.instructorName || '', date, startTime: v.startTime, endTime: v.endTime, kind: body.kind, description: body.description || '' };
+        return { historyId: ++db.seq.history, owner, offeringId: v.c.offeringId, courseId: v.c.courseId, courseName: v.c.courseName, section: v.c.section, type: body.type || v.c.type, room: body.room || '', instructorName: v.c.instructorName || '', date, startTime: v.startTime, endTime: v.endTime, kind: v.kind, description: '' };
       });
       db.schedule.push(...rows);
       return done(rows.map(({ owner: _, ...r }) => r));
@@ -587,9 +599,9 @@ async function mockRequest(method, path, body) {
     if (method === 'DELETE') { db.schedule.splice(db.schedule.indexOf(row), 1); return done({ historyId: row.historyId }); }
     if (method === 'PUT') {
       const v = checkBody(body, false);
-      const o = body.kind !== 'cancelled' && overlap(v.date, v.startTime, v.endTime, row.historyId);
+      const o = v.kind !== 'cancelled' && overlap(v.date, v.startTime, v.endTime, row.historyId);
       if (o) throw conflict(`เวลาทับกับคาบ ${o.courseId} ${timeRange(o.startTime, o.endTime)}`);
-      Object.assign(row, { offeringId: v.c.offeringId, courseId: v.c.courseId, courseName: v.c.courseName, section: v.c.section, type: body.type || row.type, room: body.room ?? row.room, date: v.date, startTime: v.startTime, endTime: v.endTime, kind: body.kind, description: body.description || '' });
+      Object.assign(row, { offeringId: v.c.offeringId, courseId: v.c.courseId, courseName: v.c.courseName, section: v.c.section, type: body.type || row.type, room: body.room ?? row.room, date: v.date, startTime: v.startTime, endTime: v.endTime, kind: v.kind, description: '' });
       const { owner: _, ...r } = row;
       return done(r);
     }
