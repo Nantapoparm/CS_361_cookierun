@@ -9,7 +9,7 @@ let off = [], mk = [];
 
 const optLabel = (p) => `${courseShort(p)} · ${thDate(p.date)} · ${timeRange(p.startTime, p.endTime)}`;
 const sel = () => ({ from: off[$('mFrom')?.value], to: mk[$('mTo')?.value] });
-const claimOf = (p) => p && claims.find((c) => c.month === month && c.status !== 'rejected' && (c.offeringId ?? c.courseId) === (p.offeringId ?? p.courseId));
+const claimOf = (p) => p && claims.find((c) => c.month === month && c.status !== 'rejected' && sameOffering(c, p));
 
 function formData() {
   const { from, to } = sel();

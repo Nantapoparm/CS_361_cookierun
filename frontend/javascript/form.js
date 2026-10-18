@@ -15,7 +15,7 @@ let rows = [];          // [{ key, workId?, workDate, startTime, endTime, hours,
 let manual = false;     // กรอกเอง (ไม่มีคาบในปฏิทิน)
 let saveTimer = null;
 const student = () => user.role === 'student_helper';
-const sameCourse = (a, b) => (a.offeringId ?? a.courseId) === (b.offeringId ?? b.courseId) && (a.offeringId != null || a.type === b.type);
+const sameCourse = sameOffering;
 const keyOf = (x) => `${x.workDate}|${hhmm(x.startTime)}`;
 const editable = () => !claim || EDITABLE.includes(claim.status);
 const returned = () => claim?.status === 'returned';
