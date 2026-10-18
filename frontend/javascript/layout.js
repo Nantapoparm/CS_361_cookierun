@@ -18,8 +18,8 @@ const NAV_ADMIN = [
   { href: 'admin-claims.html', text: 'คำขอทั้งหมด', match: ['admin-claims.html', 'admin-review.html'] },
   { href: 'admin-counter.html', text: 'เคาน์เตอร์เซ็นเอกสาร', match: ['admin-counter.html'] }
 ];
-// หน้าที่ยังไม่ได้สร้าง (V3-15) แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
-const NAV_SOON = new Set(['admin-claims.html', 'admin-counter.html']);
+// หน้าที่ยังไม่ได้สร้าง แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
+const NAV_SOON = new Set();
 
 // ป้ายบทบาท + ตำแหน่งใต้ชื่อ
 const ROLE_CHIP = { instructor: 'อาจารย์', ta: 'TA', student_helper: 'นศ.ช่วยงาน', admin: 'เจ้าหน้าที่' };

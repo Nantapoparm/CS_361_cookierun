@@ -197,6 +197,22 @@ const api = {
   // type = claim | makeup | blank → { downloadUrl, expiresIn } (mock: downloadUrl = null → หน้าเว็บวาดตัวอย่างเอง)
   getPdf:          (id, type = 'claim', extra = {}) => request('GET', `/claims/${encodeURIComponent(id)}/pdf` + qs({ type, ...extra })),
 
+  // เจ้าหน้าที่ — f = { role, status, month (รอบ YYYY-MM), offeringId, printMethod, q } → { counts:{status:n}, items:[claim + requesterName, printedAt] }
+  adminClaims: async (f = {}) => {
+    const d = await request('GET', '/admin/claims' + qs(f));
+    return { counts: d?.counts || {}, items: (d?.items || []).map(normClaim) };
+  },
+  // รายละเอียดสำหรับตรวจ: claim + schedule (คาบในตารางสอนของเดือนนั้น), termHours, maxHours, duplicates, actions
+  adminClaim: async (id) => {
+    const d = await request('GET', `/admin/claims/${encodeURIComponent(id)}`);
+    return { ...normClaim(d), schedule: (d.schedule || []).map(normPeriod), actions: d.actions || [] };
+  },
+  // decision = approve | reject | return ; reject / return ต้องมี note ; workIds = แถวที่ต้องแก้ (return)
+  reviewClaim:     async (id, decision, note = '', workIds = []) => normClaim(await request('POST', `/admin/claims/${encodeURIComponent(id)}/review`, { decision, note, workIds })),
+  markPrinted:     async (id) => normClaim(await request('POST', `/admin/claims/${encodeURIComponent(id)}/printed`)),
+  receiveDocs:     async (id) => normClaim(await request('POST', `/admin/claims/${encodeURIComponent(id)}/documents-received`)),
+  sendToFinance:   (claimIds) => request('POST', '/admin/claims/send-to-finance', { claimIds }),
+
   getTerms:        async ()   => normTerms(await request('GET', '/terms')),  // → [{ id:'1-2569', name, billingCycles }]
   getRates:        ()         => request('GET', '/rates')                    // → [{ role, ratePerHour, maxHours, maxHoursHalfLoad|null, maxAmountPerDay? }]
 };
@@ -393,7 +409,7 @@ function mockSeed(db, owner, role, me) {
     }
     const t = termOfDate(parseDay(ym + '-01'));
     const claim = {
-      claimId: claimNo(db), owner, role, status, printMethod: pm,
+      claimId: claimNo(db), owner, role, requesterName: who, status, printMethod: pm,
       offeringId: c.offeringId, courseId: c.courseId, courseName: c.courseName, section: c.section, type: c.type, room: c.room, instructorName: c.instructorName || '',
       ...t, month: ym, cycle: 1, deadline: `${addMonths(ym, 1)}-05`,
       dayClaim: status === 'draft' ? null : `${addMonths(ym, 1)}-03`,
@@ -425,6 +441,62 @@ function mockItemsFor(db, owner, role, c, ym) {
     .map((s) => ({ workId: ++db.seq.work, workDate: s.date, startTime: s.startTime, endTime: s.endTime, hours: hoursBetween(s.startTime, s.endTime), Remark: s.kind === 'makeup' ? `สอนชดเชย (${s.room})`.slice(0, 50) : '', kind: s.kind }));
 }
 
+// ข้อมูลตัวอย่างที่เจ้าหน้าที่เห็น (สร้างครั้งเดียว): บัญชีทดสอบทั้ง 3 บทบาท + ผู้ขอคนอื่นหลายสถานะ
+// plan = [[0 = รอบนี้ / 1 = รอบก่อน, สถานะ, ช่องทาง, เจ้าหน้าที่พิมพ์แล้ว?]]
+const MOCK_DEMO = [
+  { owner: 'demo-wanna', role: 'instructor', name: 'ผศ.ดร.วรรณา ศรีสุข', c: { offeringId: 31, courseId: 'CS213', courseName: 'DATA STRUCTURES', section: '650001', type: 'lecture', room: 'บร.3-201', weekdays: [2], start: '09:00', end: '12:00' }, plan: [[0, 'approved', 'sign_with_staff', true], [1, 'sent_to_finance', 'sign_with_staff']] },
+  { owner: 'demo-thanapon', role: 'instructor', name: 'อ.ธนพล มีสุข', c: { offeringId: 32, courseId: 'CS101', courseName: 'INTRODUCTION TO COMPUTER SCIENCE', section: '650003', type: 'lecture', room: 'บร.1-105', weekdays: [4], start: '13:00', end: '16:00' }, plan: [[0, 'approved', 'self_print'], [1, 'documents_received', 'self_print']] },
+  { owner: 'demo-nattaya', role: 'instructor', name: 'ดร.ณัฐยา พรหมดี', c: { offeringId: 36, courseId: 'CS111', courseName: 'PROGRAMMING FUNDAMENTALS', section: '650004', type: 'lecture', room: 'บร.1-201', weekdays: [5], start: '09:00', end: '12:00' }, plan: [[0, 'submitted', 'sign_with_staff']] },
+  { owner: 'demo-kittiti', role: 'ta', name: 'นายกิตติ ใจงาม', c: { offeringId: 33, courseId: 'CS213', courseName: 'DATA STRUCTURES', section: '650001', type: 'lab', room: 'บร.3-Lab 2', weekdays: [3], start: '13:30', end: '16:30', instructorName: 'ผศ.ดร.วรรณา ศรีสุข' }, plan: [[0, 'approved', 'sign_with_staff'], [1, 'sent_to_finance', 'self_print']] },
+  { owner: 'demo-pimchanok', role: 'ta', name: 'นางสาวพิมพ์ชนก แก้วดี', c: { offeringId: 37, courseId: 'CS111', courseName: 'PROGRAMMING FUNDAMENTALS', section: '650004', type: 'lab', room: 'บร.3-Lab 1', weekdays: [1], start: '09:00', end: '12:00', instructorName: 'ดร.ณัฐยา พรหมดี' }, plan: [[0, 'submitted', 'self_print']] },
+  { owner: 'demo-phumi', role: 'student_helper', name: 'นายภูมิ รักเรียน', c: { offeringId: 34, courseId: '', courseName: 'งานธุรการ สำนักงานโครงการ', section: '', type: 'lecture', room: 'บร.2-101', weekdays: [2, 4], start: '13:00', end: '17:00' }, plan: [[0, 'documents_received', 'sign_with_staff']] },
+  { owner: 'demo-thanakorn', role: 'student_helper', name: 'นายธนกร ขยันดี', c: { offeringId: 35, courseId: '', courseName: 'งานห้องปฏิบัติการ', section: '', type: 'lecture', room: 'บร.3-Lab 1', weekdays: [5], start: '09:00', end: '12:00' }, plan: [[0, 'approved', 'self_print']] }
+];
+
+function mockSeedDemo(db) {
+  if (db.owners.__demo) return;
+  db.owners.__demo = 'admin';
+  // บัญชีทดสอบ (auth.stub.js) — login ด้วย Cognito จริง sub จะต่างไป แต่คำขอของบัญชีจริงก็ขึ้นในหน้านี้ด้วย (localStorage เดียวกัน)
+  mockSeed(db, 'stub-instructor', 'instructor', { name: 'สมชาย', lastName: 'อยู่เย็น' });
+  mockSeed(db, 'stub-ta', 'ta', { name: 'สมหมาย', lastName: 'ขายกางเกง' });
+  mockSeed(db, 'stub-student', 'student_helper', { name: 'สมใจ', lastName: 'ใฝ่รู้' });
+
+  const per = periodFromDate();
+  const today = todayIso();
+  const staff = 'คุณวิภา (จนท.)';
+  MOCK_DEMO.forEach((u) => {
+    db.owners[u.owner] = u.role;
+    u.plan.forEach(([back, status, pm, printed]) => {
+      const ym = addMonths(per.claimMonth, -back);
+      const deadline = back === 0 ? per.deadline : `${addMonths(ym, 1)}-05`;
+      const days = daysOfMonth(ym).filter((d) => u.c.weekdays.includes(parseDay(d).getDay()) && d < today);
+      // ตารางสอน / ปฏิทินงานของเดือนนั้น (ใช้เทียบในหน้าตรวจ)
+      days.forEach((date) => {
+        if (u.role === 'student_helper') db.workDays.push({ workId: ++db.seq.work, owner: u.owner, offeringId: u.c.offeringId, workDate: date, startTime: u.c.start, endTime: u.c.end, hours: hoursBetween(u.c.start, u.c.end), Remark: '', claimId: null });
+        else db.schedule.push({ historyId: ++db.seq.history, owner: u.owner, offeringId: u.c.offeringId, courseId: u.c.courseId, courseName: u.c.courseName, section: u.c.section, type: u.c.type, room: u.c.room, instructorName: u.c.instructorName || '', date, startTime: u.c.start, endTime: u.c.end, kind: 'regular', description: '' });
+      });
+      const items = days.map((date) => ({ workId: ++db.seq.work, workDate: date, startTime: u.c.start, endTime: u.c.end, hours: hoursBetween(u.c.start, u.c.end), Remark: '', kind: 'regular' }));
+      if (!items.length) return;
+      const sub = new Date(Date.now() - (back * 30 + 3) * 86400000).toISOString();
+      const upd = new Date(Date.now() - (back * 30 + 1) * 86400000).toISOString();
+      const { weekdays, start, end, ...course } = u.c;
+      const claim = {
+        claimId: claimNo(db), owner: u.owner, role: u.role, requesterName: u.name, status, printMethod: pm, ...course,
+        ...termOfDate(parseMonth(ym)), month: ym, cycle: back === 0 ? per.cycle : 1, deadline, dayClaim: sub.slice(0, 10),
+        revision: 1, items, flaggedWorkIds: [], returnNote: null, createdAt: sub, updatedAt: upd, submittedAt: sub, printedAt: printed ? upd : null
+      };
+      db.claims.push(claim);
+      const log = (action, from, to, actor, at) => db.actions.push({ claimId: claim.claimId, action, fromStatus: from, toStatus: to, actor, note: null, createdAt: at });
+      log('autofill', null, 'draft', u.name, sub);
+      log('submitted', 'draft', 'submitted', u.name, sub);
+      if (status !== 'submitted') log('approved', 'submitted', 'approved', staff, upd);
+      if (printed) log('printed', null, null, staff, upd);
+      if (['documents_received', 'sent_to_finance'].includes(status)) log('documents_received', 'approved', 'documents_received', staff, upd);
+      if (status === 'sent_to_finance') log('sent_to_finance', 'documents_received', 'sent_to_finance', staff, upd);
+    });
+  });
+}
+
 // เติมยอดรวมแบบเดียวกับที่ server ส่งกลับ
 function mockView(c) {
   const rate = rateOf(MOCK_RATES, c.role).ratePerHour || 0;
@@ -445,7 +517,7 @@ async function mockRequest(method, path, body) {
   if (!me?.role) throw new ApiError('UNAUTHORIZED', 'กรุณาเข้าสู่ระบบ', 401);
   const owner = me.sub || me.role, role = me.role;
   const db = MOCK.load();
-  mockSeed(db, owner, role, me);
+  if (role === 'admin') mockSeedDemo(db); else mockSeed(db, owner, role, me);
   const done = (data) => { MOCK.save(db); return JSON.parse(JSON.stringify(data ?? null)); };
   const bad = (m) => new ApiError('VALIDATION_ERROR', m, 400);
   const conflict = (m) => new ApiError('INVALID_STATE', m, 409);
@@ -569,7 +641,7 @@ async function mockRequest(method, path, body) {
 
   /* ----- คำขอ ----- */
   const mine = (id) => {
-    const c = db.claims.find((x) => x.claimId === decodeURIComponent(id) && x.owner === owner); // คำขอของคนอื่น = ไม่พบ
+    const c = db.claims.find((x) => x.claimId === decodeURIComponent(id) && (x.owner === owner || role === 'admin')); // คำขอของคนอื่น = ไม่พบ (ยกเว้น admin)
     if (!c) throw notFound('ไม่พบคำขอ');
     return c;
   };
@@ -587,7 +659,7 @@ async function mockRequest(method, path, body) {
     const per = periodFromDate();
     const now = mockNow();
     return {
-      claimId: claimNo(db), owner, role, status: 'draft', printMethod: null,
+      claimId: claimNo(db), owner, role, requesterName: `${me.name || ''} ${me.lastName || ''}`.trim() || role, status: 'draft', printMethod: null,
       offeringId: c.offeringId, courseId: c.courseId, courseName: c.courseName, section: c.section, type: c.type, room: c.room, instructorName: c.instructorName || '',
       ...termOfDate(parseMonth(ym)), month: ym, cycle: per.cycle, deadline: per.deadline, dayClaim: null, revision: 0,
       items, flaggedWorkIds: [], returnNote: null, createdAt: now, updatedAt: now, submittedAt: null
@@ -628,7 +700,8 @@ async function mockRequest(method, path, body) {
     if (sub === 'actions') return done(db.actions.filter((a) => a.claimId === c.claimId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     if (sub === 'pdf') {
       const type = role === 'student_helper' && q.get('type') === 'claim' ? 'blank' : (q.get('type') || 'claim');
-      if (type === 'makeup') log(c, 'makeup_form', null, null, q.get('note') || null);
+      if (role === 'admin') { /* เจ้าหน้าที่เปิดดู/พิมพ์ — บันทึกผ่าน POST /printed แทน */ }
+      else if (type === 'makeup') log(c, 'makeup_form', null, null, q.get('note') || null);
       else if (['approved', 'documents_received', 'sent_to_finance'].includes(c.status)) log(c, 'downloaded', null, null);
       else if (c.status === 'draft' || c.status === 'returned') log(c, 'preview', null, null);
       return done({ downloadUrl: null, expiresIn: 300, type });
@@ -656,6 +729,72 @@ async function mockRequest(method, path, body) {
       c.updatedAt = now;
       log(c, 'print_method', null, null, 'เปลี่ยนเป็นเซ็นกับเจ้าหน้าที่');
       return done(mockView(c));
+    }
+  }
+  /* ----- เจ้าหน้าที่ (V3-10) — Lambda ตรวจ cognito:groups = admin เอง ----- */
+  if (p.startsWith('/admin/')) {
+    if (role !== 'admin') throw new ApiError('FORBIDDEN', 'ไม่มีสิทธิ์เข้าถึง', 403);
+    const now = mockNow();
+    const adminView = (c) => ({ ...mockView(c), requesterName: c.requesterName || c.owner, printedAt: c.printedAt || null });
+    const find = (id) => { const c = db.claims.find((x) => x.claimId === decodeURIComponent(id)); if (!c) throw notFound('ไม่พบคำขอ'); return c; };
+    if (p === '/admin/claims' && method === 'GET') {
+      const t = (q.get('q') || '').trim().toLowerCase();
+      const base = db.claims.filter((c) => c.status !== 'draft' &&
+        (!q.get('role') || c.role === q.get('role')) && (!q.get('month') || String(c.deadline).startsWith(q.get('month'))) &&
+        (!q.get('offeringId') || String(c.offeringId) === q.get('offeringId')) && (!q.get('printMethod') || c.printMethod === q.get('printMethod')) &&
+        (!t || c.claimId.includes(t) || String(c.requesterName || '').toLowerCase().includes(t)));
+      const counts = {};
+      base.forEach((c) => { counts[c.status] = (counts[c.status] || 0) + 1; });
+      return done({ counts, items: base.filter((c) => !q.get('status') || c.status === q.get('status')).map(adminView) });
+    }
+    if (p === '/admin/claims/send-to-finance' && method === 'POST') {
+      const ids = Array.isArray(body?.claimIds) ? body.claimIds.map(String) : [];
+      if (!ids.length) throw bad('ต้องระบุ claimIds อย่างน้อย 1 รายการ');
+      const list = ids.map(find);
+      const wrong = list.filter((c) => c.status !== 'documents_received');
+      if (wrong.length) throw conflict(`คำขอ ${wrong.map((c) => '#' + c.claimId).join(', ')} ยังไม่ได้รับเอกสาร`);
+      list.forEach((c) => { Object.assign(c, { status: 'sent_to_finance', updatedAt: now }); log(c, 'sent_to_finance', 'documents_received', 'sent_to_finance'); });
+      return done(list.map(adminView));
+    }
+    const am = p.match(/^\/admin\/claims\/([^/]+)(?:\/(review|printed|documents-received))?$/);
+    if (am) {
+      const c = find(am[1]), sub = am[2];
+      if (!sub && method === 'GET') {
+        // คาบในตารางสอน / ปฏิทินงานของเดือนนั้น + ชั่วโมงสะสมในภาค ให้หน้าเว็บคำนวณผลตรวจเบื้องต้น
+        const schedule = c.role === 'student_helper'
+          ? db.workDays.filter((w) => w.owner === c.owner && w.offeringId === c.offeringId && w.workDate.startsWith(c.month)).map((w) => ({ historyId: w.workId, date: w.workDate, startTime: w.startTime, endTime: w.endTime, kind: 'regular', courseId: c.courseId, room: '' }))
+          : db.schedule.filter((s) => s.owner === c.owner && s.offeringId === c.offeringId && s.date.startsWith(c.month)).map(({ owner: _, ...s }) => s);
+        const term = `${c.semester}-${be(c.academicYear)}`;
+        const termHours = Math.round(db.claims.filter((x) => x.owner === c.owner && x.claimId !== c.claimId && COUNTED.includes(x.status) &&
+          `${x.semester}-${be(x.academicYear)}` === term && (c.role !== 'instructor' || x.offeringId === c.offeringId)).reduce((h, x) => h + sumHours(x.items), 0) * 100) / 100;
+        const duplicates = db.claims.filter((x) => x.owner === c.owner && x.claimId !== c.claimId && x.offeringId === c.offeringId && x.month === c.month && x.status !== 'rejected').map((x) => x.claimId);
+        const actions = db.actions.filter((a) => a.claimId === c.claimId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        const r = rateOf(MOCK_RATES, c.role);
+        return done({ ...adminView(c), schedule, termHours, maxHours: r.maxHours, maxHoursHalfLoad: r.maxHoursHalfLoad, maxAmountPerDay: r.maxAmountPerDay || null, duplicates, actions });
+      }
+      if (sub === 'review' && method === 'POST') {
+        const d = body?.decision, note = String(body?.note || '').trim();
+        if (!['approve', 'reject', 'return'].includes(d)) throw bad('decision ต้องเป็น approve, reject หรือ return');
+        if (d !== 'approve' && !note) throw bad('การส่งกลับและการไม่อนุมัติต้องมีหมายเหตุ');
+        if (c.status !== 'submitted') throw conflict('ตรวจได้เฉพาะคำขอที่รอเจ้าหน้าที่ตรวจ');
+        const to = { approve: 'approved', reject: 'rejected', return: 'returned' }[d];
+        Object.assign(c, { status: to, updatedAt: now });
+        if (d === 'return') Object.assign(c, { returnNote: note, flaggedWorkIds: (body.workIds || []).map(Number), returnedBy: `${me.name || ''} ${me.lastName || ''}`.trim() || 'เจ้าหน้าที่', returnedAt: now });
+        log(c, to, 'submitted', to, note || null);
+        return done(adminView(c));
+      }
+      if (sub === 'printed' && method === 'POST') {
+        if (c.status !== 'approved') throw conflict('พิมพ์ได้เฉพาะคำขอที่ตรวจผ่านแล้ว');
+        c.printedAt = now;
+        log(c, 'printed', null, null);
+        return done(adminView(c));
+      }
+      if (sub === 'documents-received' && method === 'POST') {
+        if (c.status !== 'approved') throw conflict('รับเอกสารได้เฉพาะคำขอที่ตรวจผ่านแล้ว');
+        Object.assign(c, { status: 'documents_received', updatedAt: now });
+        log(c, 'documents_received', 'approved', 'documents_received');
+        return done(adminView(c));
+      }
     }
   }
   throw new ApiError('NOT_FOUND', 'ไม่พบ route', 404);

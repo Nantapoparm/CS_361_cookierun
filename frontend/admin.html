@@ -10,9 +10,9 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/claims.css">
   <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/user.css">
+  <link rel="stylesheet" href="css/admin.css">
 </head>
 <body class="app">
   <header class="topbar" data-mount="topbar"></header>
@@ -22,11 +22,35 @@
       <div>
         <div class="eyebrow">เจ้าหน้าที่ · ภาพรวมรอบเบิก</div>
         <h1 id="hello">สวัสดี</h1>
+        <p class="lead" id="lead"></p>
+      </div>
+      <div class="tools">
+        <a class="btn ghost" href="admin-counter.html">เปิดเคาน์เตอร์เซ็น</a>
+        <a class="btn" href="admin-claims.html?status=submitted" id="btnReview">ตรวจคำขอที่รอ</a>
       </div>
     </div>
 
-    <!-- เนื้อหา AD1 (การ์ดรอบการเบิก, จำนวนตามสถานะ, รอตรวจล่าสุด) ทำใน V3-15 -->
-    <div class="card" id="body"></div>
+    <div id="msg"></div>
+    <div class="admin-top" id="top">
+      <section class="period" id="period" aria-label="รอบการเบิกปัจจุบัน"></section>
+      <a class="stat blue" href="admin-claims.html?status=submitted" id="sSub"></a>
+      <a class="stat red" href="admin-claims.html?status=returned" id="sRet"></a>
+      <a class="stat brown" href="admin-counter.html" id="sSign"></a>
+      <a class="stat green" href="admin-claims.html?status=sent_to_finance" id="sDone"></a>
+    </div>
+
+    <div class="admin-mid section-gap">
+      <section class="table-card" aria-labelledby="pendTitle">
+        <div class="card-head"><h3 id="pendTitle">รอตรวจล่าสุด</h3><a class="link" href="admin-claims.html?status=submitted">ดูทั้งหมด →</a></div>
+        <table class="dtable admin-list">
+          <thead><tr><th>เลขที่</th><th>บทบาท</th><th>ผู้ขอ</th><th>รายการ</th><th class="num">ชม.</th><th class="num">บาท</th><th>สถานะ</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+      <aside class="admin-side">
+        <section class="card" id="byRole" aria-labelledby="roleTitle"></section>
+      </aside>
+    </div>
   </div></main>
   <footer class="site-footer" data-mount="footer"></footer>
 
@@ -36,6 +60,8 @@
   <script src="javascript/config.js"></script>
   <script src="javascript/auth.js"></script>
   <script src="javascript/api.js"></script>
+  <script src="javascript/pdf.js"></script>
+  <script src="javascript/admin-ui.js"></script>
   <script src="javascript/admin.js"></script>
 </body>
 </html>
