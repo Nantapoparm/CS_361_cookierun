@@ -152,7 +152,7 @@ const normClaim = (c) => (c ? {
 /* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
   // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle? }
-  //getCurrentPeriod: () => request('GET', '/current-period'),
+  getCurrentPeriod: () => request('GET', '/current-period'),
 
   // ปฏิทินคาบสอน (อาจารย์ / TA) → { month, periods:[period], summary:[{courseId, periods, hours}], courses:[course] }
   getSchedule: async (month) => {
