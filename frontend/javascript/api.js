@@ -155,7 +155,7 @@ function coursesOf(periods) {
 }
 const normClaim = (c) => (c ? {
   ...c,
-  claimId: String(c.claimId ?? c.id),
+  claimId: (c.claimId ?? c.id) != null ? String(c.claimId ?? c.id) : null,
   term: `${c.semester}-${be(c.academicYear)}`,
   items: (c.items || []).map((x) => ({ ...x, startTime: hhmm(x.startTime), endTime: hhmm(x.endTime), workDate: String(x.workDate).slice(0, 10) }))
 } : c);
@@ -202,9 +202,9 @@ const api = {
     return term ? list.filter((c) => c.term === term) : list;
   },
   getClaim:        async (id)       => normClaim(await request('GET',  `/claims/${encodeURIComponent(id)}`)),
-  // สร้างร่างจากปฏิทิน 1 วิชา / 1 เดือน — เดือนนั้นไม่มีคาบ = { items: [] } (ไม่สร้างคำขอ)
+  // อ่านคาบจากปฏิทิน 1 วิชา / 1 เดือน ในรูปคำขอ (claimId: null) — ไม่บันทึกลง DB ; เดือนนั้นไม่มีคาบ = null
   autofillClaim:   async (offeringId, month) => normClaim(await request('POST', '/claims/autofill', { offeringId, month })),
-  // กรอกเอง (ไม่มีคาบในปฏิทิน): body = { offeringId, month, items }
+  // สร้างร่าง (จากปฏิทินหรือกรอกเอง): body = { offeringId, month, items:[{ workDate, startTime, endTime, hours, Remark, kind }] }
   createClaim:     async (body)     => normClaim(await request('POST', '/claims', body)),
   // แก้ร่าง / คำขอที่ถูกส่งกลับ: body = { items:[{ workId?, workDate, startTime, endTime, hours, Remark, kind }] }
   updateClaim:     async (id, body) => normClaim(await request('PUT',  `/claims/${encodeURIComponent(id)}`, body)),
@@ -271,7 +271,7 @@ function claimedHours(claims, { term, role, offeringId, except }) {
 }
 
 /* ---------- ข้อมูลคำขอที่ยังไม่บันทึก (ขั้นที่ 1 → ขั้นที่ 2) ----------
-   "ดูตัวอย่าง PDF" ไม่บันทึกลง DB (autofill สร้างคำขอซ้ำวิชา+เดือนเดิมไม่ได้ จึงต้องสร้างครั้งเดียวตอนยื่น)
+   "ดูตัวอย่าง PDF" ไม่บันทึกลง DB (POST /claims สร้างคำขอซ้ำวิชา+เดือนเดิมไม่ได้ จึงสร้างครั้งเดียวตอนยื่น)
    ส่งข้อมูลในฟอร์มไปหน้า submit.html ผ่าน sessionStorage ; กลับไปแก้ไขแล้วข้อมูลยังอยู่
    draft = { claimId|null, offeringId, month, manual, hasSource, course:{...}, rows:[แถวทั้งหมด + checked] } */
 const DRAFT_KEY = 'claimPreview';
@@ -702,12 +702,10 @@ async function mockRequest(method, path, body) {
     if (!c || !/^\d{4}-\d{2}$/.test(ym || '')) throw bad('ต้องระบุ offeringId และ month (YYYY-MM)');
     const d = dup(c.offeringId, ym);
     if (d) throw conflict(`มีคำขอ #${d.claimId} ของวิชานี้ในเดือนนี้แล้ว`);
+    // อ่านอย่างเดียว: คืนคาบจากปฏิทินในรูปคำขอ (claimId: null) ไม่บันทึก — บันทึกจริงผ่าน POST /claims
     const items = mockItemsFor(db, owner, role, c, ym);
-    if (!items.length) return done({ claimId: null, items: [] });
-    const claim = newClaim(c, ym, items);
-    db.claims.push(claim);
-    log(claim, 'autofill', null, 'draft', `${items.length} คาบ`);
-    return done(mockView(claim));
+    if (!items.length) return done(null);
+    return done(mockView({ ...newClaim(c, ym, items), claimId: null }));
   }
   if (p === '/claims' && method === 'POST') {
     const c = findCourse(body || {}), ym = body?.month;
