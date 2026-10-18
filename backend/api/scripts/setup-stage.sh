@@ -21,8 +21,10 @@ aws logs put-retention-policy --log-group-name "$LOG_GROUP_NAME" \
   --retention-in-days 7 --region "$REGION"
 
 echo "2. Preparing access log settings (JSON)..."
+# sub = Cognito user id ของผู้เรียก (ว่างเมื่อไม่มี token), authError = สาเหตุที่ JWT Authorizer ตอบ 401
+# ห้ามเพิ่ม header Authorization หรือ claim ที่เป็นข้อมูลส่วนบุคคล (เช่น email) ลงใน Log
 cat > /tmp/access-log.json << EOF
-{"DestinationArn":"$LOG_GROUP_ARN","Format":"{\"requestId\":\"\$context.requestId\",\"ip\":\"\$context.identity.sourceIp\",\"reque>
+{"DestinationArn":"$LOG_GROUP_ARN","Format":"{\"requestId\":\"\$context.requestId\",\"ip\":\"\$context.identity.sourceIp\",\"requestTime\":\"\$context.requestTime\",\"httpMethod\":\"\$context.httpMethod\",\"routeKey\":\"\$context.routeKey\",\"status\":\"\$context.status\",\"protocol\":\"\$context.protocol\",\"responseLength\":\"\$context.responseLength\",\"extendedRequestId\":\"\$context.extendedRequestId\",\"sub\":\"\$context.authorizer.claims.sub\",\"authError\":\"\$context.authorizer.error\"}"}
 EOF
 
 echo "3. Setting up API Gateway Stage: $STAGE_NAME with Auto-deploy..."
@@ -36,6 +38,11 @@ else
   echo "   สร้าง Stage แล้ว"
 fi
 
-echo "4. Invoke URL:"
+# update-stage ข้างบนไม่ส่ง --default-route-settings จึงไม่แตะ Throttling เดิมของ V2
+echo "4. Throttling (คงค่าเดิมจาก V2):"
+aws apigatewayv2 get-stage --api-id "$API_ID" --stage-name "$STAGE_NAME" --region "$REGION" \
+  --query 'DefaultRouteSettings.{RateLimit:ThrottlingRateLimit,BurstLimit:ThrottlingBurstLimit}' --output table
+
+echo "5. Invoke URL:"
 aws apigatewayv2 get-api --api-id "$API_ID" --region "$REGION" --query ApiEndpoint --output text
 echo "Setup Complete!"

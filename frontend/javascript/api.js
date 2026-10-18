@@ -9,7 +9,8 @@
 const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
   USE_MOCK: false,
-  BASE_URL: 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com' // ใส่ URL ของ API Gateway จริง (ไม่ต้องมี / ท้าย)
+  // URL ของ API Gateway (ไม่มี / ท้าย) อ่านจาก config.js ของคนที่ 1 ก่อน
+  BASE_URL: window.APP_CONFIG?.apiBaseUrl || 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com'
 };
 
 // หน้าแรกของแต่ละบทบาทหลังเข้าสู่ระบบ — V3-14 เปลี่ยนผู้ขอเบิกเป็น home.html

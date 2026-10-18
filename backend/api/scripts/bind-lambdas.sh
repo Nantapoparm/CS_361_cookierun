@@ -3,7 +3,9 @@
 #   1) reimport openapi.yaml โดยแทน ACCOUNT_ID ด้วย Account ID จริง
 #   2) อ่านรายการ route -> Lambda จาก API จริง แล้วให้สิทธิ์ apigateway เรียก Lambda ทีละ route
 #   3) ตรวจ Stage / Access Log / CORS หลัง reimport
+#   4) ตรวจว่าทุก route ผูก JWT Authorizer (Cognito) แล้ว
 # รันซ้ำได้: สิทธิ์ที่มีอยู่แล้วจะถูกข้าม
+# Lambda ที่ยังไม่ deploy (เช่น Lambda ของ V3 ที่เพื่อนยังทำอยู่) จะถูกข้ามและแจ้งไว้ รันซ้ำหลัง deploy เพื่อให้สิทธิ์
 
 set -euo pipefail
 
@@ -11,6 +13,7 @@ set -euo pipefail
 REGION="${REGION:-us-east-1}"
 OPENAPI="${OPENAPI:-backend/api/openapi.yaml}"
 EXPECT_ORIGIN="${EXPECT_ORIGIN:-https://d2ye2fegyyx6ls.cloudfront.net}"
+EXPECT_ISSUER="${EXPECT_ISSUER:-https://cognito-idp.us-east-1.amazonaws.com/us-east-1_tGEzAfQt2}"
 SKIP_IMPORT="${SKIP_IMPORT:-0}"
 
 ACCT=$(aws sts get-caller-identity --query Account --output text)
@@ -41,7 +44,7 @@ while IFS=$'\t' read -r id uri; do
 done < <(aws apigatewayv2 get-integrations --api-id "$API_ID" --region "$REGION" \
           --query 'Items[].[IntegrationId,IntegrationUri]' --output text)
 
-BAD=0; N=0
+BAD=0; N=0; MISSING=0
 printf '   %-28s %-26s %s\n' "ROUTE" "LAMBDA" "ผล"
 while IFS=$'\t' read -r key target; do
   [ -z "$key" ] && continue
@@ -53,7 +56,7 @@ while IFS=$'\t' read -r key target; do
     printf '   %-28s %-26s %s\n' "$key" "-" "ไม่มี integration ที่ชี้ Lambda"; BAD=$((BAD+1)); continue
   fi
   if ! aws lambda get-function --function-name "$fn" --region "$REGION" >/dev/null 2>&1; then
-    printf '   %-28s %-26s %s\n' "$key" "$fn" "ไม่พบ Lambda (ยังไม่ได้ deploy?)"; BAD=$((BAD+1)); continue
+    printf '   %-28s %-26s %s\n' "$key" "$fn" "ยังไม่มี Lambda (ข้าม รอ deploy)"; MISSING=$((MISSING+1)); continue
   fi
 
   method="${key%% *}"; path="${key#* }"
@@ -98,6 +101,26 @@ case "$ORIGINS" in
   *) echo "   CORS: ไม่พบ origin $EXPECT_ORIGIN (AllowOrigins: $ORIGINS)"; BAD=$((BAD+1)) ;;
 esac
 
+# ---------- 4) JWT Authorizer ----------
+echo "4) ตรวจ JWT Authorizer"
+AUTH=$(aws apigatewayv2 get-authorizers --api-id "$API_ID" --region "$REGION" \
+        --query "Items[?AuthorizerType=='JWT'] | [0].[AuthorizerId,Name,JwtConfiguration.Issuer,join(',',JwtConfiguration.Audience)]" \
+        --output text 2>&1 || true)
+read -r AUTH_ID AUTH_NAME AUTH_ISS AUTH_AUD <<<"$AUTH"
+if [ "$AUTH_ISS" = "$EXPECT_ISSUER" ]; then
+  echo "   Authorizer $AUTH_NAME ($AUTH_ID) issuer ถูกต้อง audience=$AUTH_AUD"
+else
+  echo "   ไม่พบ JWT Authorizer ที่ issuer เป็น $EXPECT_ISSUER (ได้: $AUTH)"; BAD=$((BAD+1))
+fi
+NOAUTH=$(aws apigatewayv2 get-routes --api-id "$API_ID" --region "$REGION" \
+          --query "Items[?RouteKey!='\$default' && (AuthorizationType!='JWT' || AuthorizerId!='$AUTH_ID')].RouteKey" --output text)
+if [ -z "$NOAUTH" ] || [ "$NOAUTH" = "None" ]; then
+  echo "   ทุก route ($N) ผูก Authorizer แล้ว"
+else
+  echo "   route ที่ยังไม่ผูก Authorizer: $NOAUTH"; BAD=$((BAD+1))
+fi
+
 echo "Invoke URL: $(aws apigatewayv2 get-api --api-id "$API_ID" --region "$REGION" --query ApiEndpoint --output text)"
 if [ "$BAD" -gt 0 ]; then echo "สรุป: มี $BAD รายการที่ต้องแก้ (จาก $N route)"; exit 1; fi
+[ "$MISSING" -gt 0 ] && echo "หมายเหตุ: มี $MISSING route ที่ Lambda ยังไม่ deploy (route ตอบ 500 จนกว่าจะ deploy แล้วรันสคริปต์นี้ซ้ำ)"
 echo "สรุป: ผูกครบ $N route"
