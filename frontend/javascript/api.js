@@ -270,6 +270,15 @@ function claimedHours(claims, { term, role, offeringId, except }) {
     (!perCourseCap(role) || c.offeringId === offeringId)).reduce((s, c) => s + Number(c.totalHours || 0), 0) * 100) / 100;
 }
 
+/* ---------- ข้อมูลคำขอที่ยังไม่บันทึก (ขั้นที่ 1 → ขั้นที่ 2) ----------
+   "ดูตัวอย่าง PDF" ไม่บันทึกลง DB (autofill สร้างคำขอซ้ำวิชา+เดือนเดิมไม่ได้ จึงต้องสร้างครั้งเดียวตอนยื่น)
+   ส่งข้อมูลในฟอร์มไปหน้า submit.html ผ่าน sessionStorage ; กลับไปแก้ไขแล้วข้อมูลยังอยู่
+   draft = { claimId|null, offeringId, month, manual, hasSource, course:{...}, rows:[แถวทั้งหมด + checked] } */
+const DRAFT_KEY = 'claimPreview';
+function saveDraftPreview(d) { try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d)); return true; } catch { return false; } }
+function loadDraftPreview() { try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null'); } catch { return null; } }
+function clearDraftPreview() { try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* ข้าม */ } }
+
 // แสดง error ตาม error.code — 400 / 409 ใช้ข้อความจาก server เพราะบอกสาเหตุได้ตรงกว่า
 function errorText(err) {
   return {
