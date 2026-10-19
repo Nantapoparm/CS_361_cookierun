@@ -1,6 +1,6 @@
 // form.js — สร้างคำขอ ขั้นที่ 1 ข้อมูลคำขอ (Figma I4 อาจารย์ · T3 TA 1 ใบต่อวิชา · I13 แก้ไขคำขอที่ถูกส่งกลับ · ST3 ไม่มีข้อมูลในปฏิทิน)
 // เปิดได้ 2 แบบ: form.html?month=YYYY-MM[&offeringId=] = คำขอใหม่จากปฏิทิน ; form.html?id=<claimId> = แก้ร่าง / คำขอที่ถูกส่งกลับ
-// Input : GET /current-period, /rates, /claims, คาบของเดือน (GET /schedule หรือ /work-days) และ GET /claims/{id}
+// Input : GET /current-period, /rates, /claims, คาบของเดือน (GET /schedule ทุก role) และ GET /claims/{id}
 // Output: บันทึกร่าง → POST /claims { offeringId, month, items } (ครั้งแรก) แล้ว PUT /claims/{id} { items } ด้วยคาบที่ติ๊ก
 //         (POST /claims/autofill อ่านอย่างเดียว ไม่บันทึก — ไม่ได้ใช้ตอนบันทึก)
 //         ดูตัวอย่าง PDF → submit.html?preview=1 (ขั้นที่ 2) ไม่บันทึกลง DB — ส่งข้อมูลผ่าน sessionStorage (saveDraftPreview)
