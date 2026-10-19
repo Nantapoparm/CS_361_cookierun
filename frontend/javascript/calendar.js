@@ -172,10 +172,7 @@ function renderSide() {
   if (user.role === 'instructor') {
     extra = `<ul class="cal-key">
       <li><i class="k reg"></i>คาบตามตาราง</li><li><i class="k mk"></i>สอนชดเชย / เพิ่มเอง</li><li><i class="k off"></i>วันหยุด / งดสอน (ไม่นับ)</li></ul>`;
-  } else if (user.role === 'ta') {
-    const cap = capOf(rates, 'ta', user.load);
-    extra = alertHtml('warn', `คาบของ TA <b>ดึงจากทุกวิชาที่ได้รับมอบหมายตามตารางสอนของอาจารย์แต่ละวิชา</b> — เพิ่มชั่วโมงตรวจงาน/คุมสอบได้เอง · เพดาน ${num(cap)} ชม. นับรวมทุกวิชา`);
-  } else {
+  } else if (student()) {
     extra = clockCard();
   }
   $('side').innerHTML = summary + extra;
