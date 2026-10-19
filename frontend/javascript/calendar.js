@@ -1,10 +1,10 @@
 // calendar.js — ปฏิทินคาบสอน (Figma I2 อาจารย์ · I3 แก้ไขคาบ · T2 TA หลายวิชา · ST2 ปฏิทินว่าง) และปฏิทินงาน (S2 นักศึกษาช่วยงาน)
-// Input : อาจารย์ / TA → GET /schedule?month=YYYY-MM ; นักศึกษาช่วยงาน → GET /work-days?month=YYYY-MM
+// Input : อาจารย์ / TA → GET /schedule?month=YYYY-MM ; นักศึกษาช่วยงาน → GET /schedule?month=YYYY-MM เช่นกัน (api.getWorkDays แปลงเป็นวันทำงาน)
 // Output: ปฏิทินเดือน / สัปดาห์ (มือถือแสดงเป็นรายการรายวัน), กล่องสรุปเดือนนี้ที่ใช้ autofill คำขอ
 // เพิ่ม/แก้คาบ → POST /schedule body = { courseId, sessionId, startTime, endTime (ISO 8601), room, description, repeatUntil? }
 //              description = ประเภทคาบ regular | cancelled | makeup (teaching_histories ไม่มีคอลัมน์ kind)
 //              PUT /schedule/{id} (ช่องเดียวกัน ไม่มี repeatUntil) · DELETE /schedule/{id}
-// วันทำงาน   → POST /work-days · PUT /work-days/{id} · DELETE /work-days/{id} (ลงเวลาวันนี้ใช้ route เดียวกัน)
+// วันทำงาน   → POST /schedule · PUT /schedule/{id} · DELETE /schedule/{id} ผ่าน api.*WorkDay (หมายเหตุเก็บใน description ; ลงเวลาวันนี้ใช้ route เดียวกัน)
 
 let user, period, rates = [];
 let view = 'month';

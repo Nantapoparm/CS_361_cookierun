@@ -160,6 +160,17 @@ const normClaim = (c) => (c ? {
   items: (c.items || []).map((x) => ({ ...x, startTime: hhmm(x.startTime), endTime: hhmm(x.endTime), workDate: String(x.workDate).slice(0, 10) }))
 } : c);
 
+// วันทำงานของนักศึกษาช่วยงาน → body ของ POST / PUT /schedule (courseId / sessionId หาจาก courses ของ getWorkDays ล่าสุด)
+let workCourses = [];
+function workToSchedule(b) {
+  const c = workCourses.find((x) => String(x.offeringId) === String(b.offeringId)) || workCourses[0] || {};
+  return {
+    courseId: c.courseId, ...(c.sessionId != null ? { sessionId: c.sessionId } : {}),
+    startTime: `${b.workDate}T${hhmm(b.startTime)}:00`, endTime: `${b.workDate}T${hhmm(b.endTime)}:00`,
+    room: '', description: (b.Remark || '').trim()
+  };
+}
+
 /* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
   // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle }
@@ -183,17 +194,29 @@ const api = {
   deleteSchedule:  (id)       => request('DELETE', `/schedule/${encodeURIComponent(id)}`),
 
   // ปฏิทินงาน (นักศึกษาช่วยงาน) → { items:[workDay], courses:[course] } ; body = { offeringId, workDate, startTime, endTime, Remark? }
-  // response เป็น array ล้วนก็ได้ (courses รวบรวมจากวันทำงานที่ได้มา)
+  // API จริงไม่มี /work-days — ใช้ /schedule (teaching_histories) ร่วมกับอาจารย์ / TA :
+  //   วันทำงาน 1 วัน = 1 แถว ; หมายเหตุ (Remark) เก็บในคอลัมน์ description ; workId = historyId
+  // mock ยังใช้ /work-days เดิม
   getWorkDays: async (month) => {
-    const d = await request('GET', '/work-days' + qs({ month }));
-    const items = (Array.isArray(d) ? d : (d?.items || []))
-      .map((w) => ({ ...w, workDate: String(w.workDate).slice(0, 10), startTime: hhmm(w.startTime), endTime: hhmm(w.endTime), hours: Number(w.hours ?? hoursBetween(w.startTime, w.endTime)) }))
-      .sort((a, b) => (a.workDate + a.startTime).localeCompare(b.workDate + b.startTime));
-    return { month, items, courses: d?.courses?.length ? d.courses : coursesOf(items) };
+    if (API_CONFIG.USE_MOCK) {
+      const d = await request('GET', '/work-days' + qs({ month }));
+      const items = (Array.isArray(d) ? d : (d?.items || []))
+        .map((w) => ({ ...w, workDate: String(w.workDate).slice(0, 10), startTime: hhmm(w.startTime), endTime: hhmm(w.endTime), hours: Number(w.hours ?? hoursBetween(w.startTime, w.endTime)) }))
+        .sort((a, b) => (a.workDate + a.startTime).localeCompare(b.workDate + b.startTime));
+      return { month, items, courses: d?.courses?.length ? d.courses : coursesOf(items) };
+    }
+    const s = await api.getSchedule(month);
+    workCourses = s.courses;
+    const items = s.periods.map((p) => {
+      const c = s.courses.find((x) => sameOffering(p, x)) || {};
+      return { workId: p.historyId, offeringId: p.offeringId ?? c.offeringId, courseId: p.courseId, courseName: p.courseName || c.courseName || '', sessionId: p.sessionId ?? c.sessionId,
+        workDate: p.date, startTime: p.startTime, endTime: p.endTime, hours: hoursBetween(p.startTime, p.endTime), Remark: p.description || '' };
+    });
+    return { month, items, courses: s.courses };
   },
-  createWorkDay:   (body)     => request('POST',   '/work-days', body),
-  updateWorkDay:   (id, body) => request('PUT',    `/work-days/${encodeURIComponent(id)}`, body),
-  deleteWorkDay:   (id)       => request('DELETE', `/work-days/${encodeURIComponent(id)}`),
+  createWorkDay:   (body)     => (API_CONFIG.USE_MOCK ? request('POST', '/work-days', body) : api.createSchedule(workToSchedule(body))),
+  updateWorkDay:   (id, body) => (API_CONFIG.USE_MOCK ? request('PUT', `/work-days/${encodeURIComponent(id)}`, body) : api.updateSchedule(id, workToSchedule(body))),
+  deleteWorkDay:   (id)       => (API_CONFIG.USE_MOCK ? request('DELETE', `/work-days/${encodeURIComponent(id)}`) : api.deleteSchedule(id)),
 
   // คำขอ — f = { term:'1-2569', status } กรองภาคที่ FE หลังแปลงเป็น พ.ศ.
   getClaims: async (f = {}) => {

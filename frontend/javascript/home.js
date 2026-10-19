@@ -1,6 +1,6 @@
 // home.js — ภาพรวมของผู้ขอเบิก (Figma I1 อาจารย์ · T1 TA · S1 นักศึกษาช่วยงาน · ST1 กำลังโหลด)
 // Input : GET /current-period, GET /claims, GET /rates และคาบของเดือนที่กำลังเบิก
-//         (อาจารย์ / TA: GET /schedule?month= ; นักศึกษาช่วยงาน: GET /work-days?month=)
+//         (อาจารย์ / TA: GET /schedule?month= ; นักศึกษาช่วยงาน: GET /schedule?month= เช่นกัน)
 // Output: การ์ดรอบการเบิก, ชั่วโมงสะสมเทียบเพดาน, สรุปเดือน, แจ้งเตือนคำขอที่ถูกส่งกลับ / ใกล้เพดาน, คำขอล่าสุด
 
 let user;
