@@ -27,11 +27,18 @@
 .month .stats span { display: block; font-size: 13px; color: var(--ink-muted); }
 .home-alerts { display: grid; gap: 12px; margin-bottom: 18px; }
 .home-alerts:empty { display: none; }
+/* แบบฟอร์มเปล่าของนักศึกษาช่วยงาน (ใช้หน้าตาการ์ดเลือกแบบเดียวกับช่องทางยื่น) */
+.forms-card { margin-bottom: 18px; }
+.forms-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.form-tile { cursor: default; }
+.form-tile:hover { border-color: var(--line); }
+.form-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 #msg.card { padding: 0; }
 
 @media (max-width: 640px) {
   .home-cards > * { min-height: 0; }
   .month .stats b { font-size: 24px; }
+  .forms-grid { grid-template-columns: 1fr; }
 }
 
 /* ---------- ฟอร์มใน Modal / หน้า (2 คอลัมน์) ---------- */

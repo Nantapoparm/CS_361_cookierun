@@ -59,12 +59,14 @@ function downloadCsv(name, rows) {
 
 // เอกสารของคำขอ ใช้ชื่อผู้ขอ (ไม่ใช่เจ้าหน้าที่ที่ login)
 const requesterOf = (c) => { const n = String(c.requesterName || '').trim(); const i = n.lastIndexOf(' '); return i > 0 ? { name: n.slice(0, i), lastName: n.slice(i + 1) } : { name: n, lastName: '' }; };
-const adminDocHtml = (c) => (c.role === 'student_helper' ? blankDocHtml() : claimDocHtml(c, requesterOf(c)));
+const adminDocHtml = (c) => (c.role === 'student_helper' ? blankDocHtml(c) : claimDocHtml(c, requesterOf(c)));
 const adminDocName = (c) => docFileName(c, { name: requesterOf(c).name.replace(/^.*\./, '') });
 
 // พิมพ์เอกสารที่ตรวจผ่าน 1 ใบหรือหลายใบ: ขอ PDF (Lambda บันทึกการดาวน์โหลด) → เปิด/พิมพ์ → บันทึกว่าพิมพ์แล้ว (กันพิมพ์ซ้ำ)
 async function printClaims(list) {
-  const urls = await Promise.all(list.map((c) => api.getPdf(c.claimId, c.role === 'student_helper' ? 'blank' : 'claim').then((r) => r?.downloadUrl).catch(() => null)));
+  // นักศึกษาช่วยงาน = แบบฟอร์มเปล่าในเว็บ (ตามโครงการ) ; อื่นๆ ขอ PDF จาก Lambda
+  const urls = await Promise.all(list.map((c) => (c.role === 'student_helper' ? Promise.resolve(blankFormOf(c).file)
+    : api.getPdf(c.claimId, 'claim').then((r) => r?.downloadUrl).catch(() => null))));
   if (list.length === 1 || urls.every(Boolean)) {
     if (urls.every(Boolean)) urls.forEach((u) => window.open(u, '_blank', 'noopener'));
     else openDoc(null, adminDocHtml(list[0]), adminDocName(list[0]));

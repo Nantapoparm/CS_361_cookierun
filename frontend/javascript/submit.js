@@ -15,7 +15,7 @@ let method = 'sign_with_staff';
 const student = () => user.role === 'student_helper';
 const docType = () => (student() ? 'blank' : 'claim');
 const formName = () => (student() ? 'แบบฟอร์มเปล่า — นักศึกษาช่วยงาน' : `ใบลงลายมือชื่อ — ${user.role === 'ta' ? 'TA' : 'อาจารย์'}`);
-const docHtml = () => (student() ? blankDocHtml() : claimDocHtml(claim, user));
+const docHtml = () => (student() ? blankDocHtml(claim) : claimDocHtml(claim, user));
 const fileName = () => docFileName(claim, user);
 const countTxt = () => `${num(claim.totalHours)} ชม. (${claim.items.length} ${student() ? 'วัน' : 'คาบ'})`;
 
@@ -93,7 +93,9 @@ function pick(pm) {
 async function loadPdf() {
   $('doc').innerHTML = `<div class="pdf-frame"><div class="paper loading">${skeleton(['w60', '', 'w80', 'lg', 'lg', 'lg'])}<p class="loading-text">กำลังสร้างตัวอย่าง PDF…</p></div></div>`;
   pdf = null;
-  if (claim.claimId && !draft) {
+  // นักศึกษาช่วยงาน: แบบฟอร์มเปล่าเป็นไฟล์จริงในเว็บ (ตามโครงการของคำขอ) ไม่ต้องขอจาก Lambda
+  if (student()) pdf = { downloadUrl: blankFormOf(claim).file };
+  else if (claim.claimId && !draft) {
     try { pdf = await api.getPdf(claim.claimId, docType()); } catch (err) { console.warn('ใช้ตัวอย่างที่วาดเองแทน PDF จาก Lambda', err); }
   }
   $('doc').innerHTML = pdfFrameHtml(fileName(), docHtml(), pdf?.downloadUrl);
@@ -225,6 +227,7 @@ async function switchMethod() {
 }
 
 async function download() {
+  if (student()) { window.open(blankFormOf(claim).file, '_blank', 'noopener'); return; }
   try {
     const r = await api.getPdf(claim.claimId, docType());
     openDoc(r?.downloadUrl, docHtml(), fileName());
