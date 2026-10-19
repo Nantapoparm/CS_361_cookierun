@@ -25,7 +25,9 @@ function eventsOf(data) {
     ? data.items.map((w) => ({ ...w, id: w.workId, date: w.workDate, kind: 'work' }))
     : data.periods.map((p) => ({ ...p, id: p.historyId }));
 }
-let events = [], courses = [];
+// courses = วิชาของผู้ใช้ (สรุป / สี) ; allCourses = ทุกวิชาที่เปิดในภาค ใช้ในตัวเลือกวิชาตอนเพิ่มคาบ
+// (Lambda เก่าไม่ส่ง allCourses → ใช้ courses แทน)
+let events = [], courses = [], allCourses = [];
 
 async function load(force = false) {
   $('msg').innerHTML = '';
@@ -34,7 +36,8 @@ async function load(force = false) {
     const months = view === 'week' ? [...new Set(weekDays().map((d) => d.slice(0, 7)))] : [month];
     const list = await Promise.all(months.map((m) => fetchMonth(m, force)));
     events = list.flatMap(eventsOf);
-    courses = list.find((d) => d.courses?.length)?.courses || courses;
+    courses = list.find((d) => d.courses?.length)?.courses || (list.some((d) => d.allCourses) ? [] : courses);
+    allCourses = list.find((d) => d.allCourses?.length)?.allCourses || courses;
     render();
   } catch (err) {
     $('cal').innerHTML = '';
@@ -61,6 +64,7 @@ function weekDays() {
 
 // สีประจำวิชาของ TA (หลายวิชา) ; อาจารย์ใช้สีตามประเภทคาบ
 const courseIdx = (e) => Math.max(0, courses.findIndex((c) => sameOffering(c, e)));
+const pickIdx = (e) => Math.max(0, allCourses.findIndex((c) => sameOffering(c, e)));
 const shortName = (s) => String(s || '').replace(/^(ศ\.|รศ\.|ผศ\.|อ\.)?(ดร\.)?/, (m) => (m ? 'อ.' : '')).replace(/\s.*$/, '');
 
 function evHtml(e) {
@@ -187,7 +191,7 @@ function renderSide() {
 function clockCard() {
   const today = todayIso();
   const w = events.find((e) => e.date === today);
-  const c = courses[0] || {};
+  const c = courses[0] || allCourses[0] || {};
   const r = rateOf(rates, 'student_helper');
   return `<section class="card clock">
     <h3>ลงเวลาวันนี้</h3>
@@ -205,7 +209,7 @@ function bindClock() {
   $('cSave')?.addEventListener('click', async () => {
     const today = todayIso();
     const w = events.find((e) => e.date === today);
-    const c = courses[0];
+    const c = courses[0] || allCourses[0];
     const body = { offeringId: w?.offeringId ?? c?.offeringId, workDate: today, startTime: $('cIn').value, endTime: $('cOut').value, Remark: w?.Remark || '' };
     if (!body.startTime || !body.endTime || hoursBetween(body.startTime, body.endTime) <= 0) { toast('กรุณาใส่เวลาเข้าและออกให้ถูกต้อง', true); return; }
     $('cSave').disabled = true;
@@ -230,11 +234,11 @@ const radio = (name, value, label, checked) => `<label class="opt"><input type="
 function periodForm(e, date) {
   const isNew = !e;
   const kind = e?.kind || (user.role === 'instructor' && date ? 'makeup' : 'regular');
-  const ci = e ? courseIdx(e) : 0;
-  const c = courses[ci] || {};
+  const ci = e ? pickIdx(e) : 0;
+  const c = allCourses[ci] || {};
   return `<div class="form-2">
     <div class="field"><label for="fCourse">วิชา</label>
-      <select id="fCourse">${courses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(user.role === 'ta' ? courseSec(x) : courseFull(x))}</option>`).join('')}</select></div>
+      <select id="fCourse">${allCourses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(user.role === 'ta' ? courseSec(x) : courseFull(x))}</option>`).join('')}</select></div>
     <div class="field sys"><label for="fSec">Section</label><input id="fSec" value="${esc(c.section || '-')}" readonly></div>
     <div class="field full"><label for="fRoom">ห้อง</label><input id="fRoom" value="${esc(e?.room ?? c.room ?? '')}" maxlength="50"></div>
     <div class="field"><label for="fDate">วันที่</label><input type="date" id="fDate" value="${esc(e?.date || date || todayIso())}" required></div>
@@ -251,11 +255,11 @@ function periodForm(e, date) {
 }
 
 function workForm(e, date) {
-  const ci = e ? courseIdx(e) : 0;
-  const c = courses[ci] || {};
+  const ci = e ? pickIdx(e) : 0;
+  const c = allCourses[ci] || {};
   return `<div class="form-2">
     <div class="field full"><label for="fCourse">งาน</label>
-      <select id="fCourse">${courses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(x.courseName)}</option>`).join('')}</select></div>
+      <select id="fCourse">${allCourses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(x.courseName)}</option>`).join('')}</select></div>
     <div class="field"><label for="fDate">วันที่</label><input type="date" id="fDate" value="${esc(e?.date || date || todayIso())}"></div>
     <div class="field"><span class="lbl">เวลาเข้า – ออก</span>
       <div class="time2"><input type="time" id="fStart" aria-label="เวลาเข้า" value="${esc(e?.startTime || c.startTime || '13:00')}"><span>–</span><input type="time" id="fEnd" aria-label="เวลาออก" value="${esc(e?.endTime || c.endTime || '17:00')}"></div>
@@ -266,9 +270,9 @@ function workForm(e, date) {
 }
 
 async function openEditor(e, date) {
-  if (!courses.length) { toast('ยังไม่พบรายวิชาของภาคนี้ กรุณาติดต่อเจ้าหน้าที่', true); return; }
+  if (!allCourses.length) { toast('ยังไม่พบรายวิชาของภาคนี้ กรุณาติดต่อเจ้าหน้าที่', true); return; }
   const isNew = !e;
-  const c0 = e || courses[0];
+  const c0 = e || allCourses[0];
   const what = student() ? 'วันทำงาน' : 'คาบสอน';
   const res = await openModal({
     wide: true,
@@ -283,7 +287,7 @@ async function openEditor(e, date) {
       ['#fStart', '#fEnd'].forEach((s) => q(s).addEventListener('input', hours));
       hours();
       q('#fCourse').addEventListener('change', () => {
-        const c = courses[q('#fCourse').value];
+        const c = allCourses[q('#fCourse').value];
         if (q('#fSec')) q('#fSec').value = c.section || '-';
         if (q('#fRoom') && !q('#fRoom').value) q('#fRoom').value = c.room || '';
       });
@@ -295,7 +299,7 @@ async function openEditor(e, date) {
     },
     onOk: async (el) => {
       const q = (s) => el.querySelector(s);
-      const c = courses[q('#fCourse').value];
+      const c = allCourses[q('#fCourse').value];
       const d = q('#fDate').value, a = q('#fStart').value, b = q('#fEnd').value;
       if (!d) throw new Error('กรุณาเลือกวันที่');
       if (hoursBetween(a, b) <= 0) throw new Error('เวลาสิ้นสุดต้องหลังเวลาเริ่ม');

@@ -37,7 +37,12 @@ function sourceOf(c) {
 
 async function loadMonth() {
   monthData = student() ? await api.getWorkDays(month) : await api.getSchedule(month);
-  tabs = monthData.courses.map((c) => ({
+  // วิชาของผู้ใช้ + วิชาที่มีคำขอเดือนนี้อยู่แล้ว (เช่นถูกส่งกลับ แม้ไม่มีคาบเหลือในปฏิทิน)
+  const list = [...monthData.courses];
+  (monthData.allCourses || []).forEach((c) => {
+    if (!list.some((x) => sameCourse(x, c)) && claims.some((x) => x.month === month && sameCourse(x, c) && x.status !== 'rejected')) list.push(c);
+  });
+  tabs = list.map((c) => ({
     course: c,
     listed: claims.find((x) => x.month === month && sameCourse(x, c) && x.status !== 'rejected') || null,
     source: sourceOf(c)

@@ -185,7 +185,8 @@ const api = {
   getSchedule: async (month) => {
     const d = await request('GET', '/schedule' + qs({ month }));
     const periods = (d?.periods || []).map(normPeriod).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
-    return { month, periods, summary: d?.summary || [], courses: d?.courses?.length ? d.courses : coursesOf(periods) };
+    // courses = วิชาของผู้ใช้ ; allCourses = ทุกวิชาที่เปิดในภาค (ตัวเลือกตอนเพิ่มคาบ — Lambda เก่าไม่ส่งมา)
+    return { month, periods, summary: d?.summary || [], courses: d?.courses?.length || d?.allCourses ? (d.courses || []) : coursesOf(periods), ...(d?.allCourses ? { allCourses: d.allCourses } : {}) };
   },
   // body = { courseId, sessionId, startTime, endTime (ISO 8601), room, description = regular | cancelled | makeup, repeatUntil? (POST เท่านั้น) }
   //        sessionId มาจาก courses[].sessionId ของ GET /schedule
@@ -206,13 +207,13 @@ const api = {
       return { month, items, courses: d?.courses?.length ? d.courses : coursesOf(items) };
     }
     const s = await api.getSchedule(month);
-    workCourses = s.courses;
+    workCourses = s.allCourses?.length ? s.allCourses : s.courses;
     const items = s.periods.map((p) => {
       const c = s.courses.find((x) => sameOffering(p, x)) || {};
       return { workId: p.historyId, offeringId: p.offeringId ?? c.offeringId, courseId: p.courseId, courseName: p.courseName || c.courseName || '', sessionId: p.sessionId ?? c.sessionId,
         workDate: p.date, startTime: p.startTime, endTime: p.endTime, hours: hoursBetween(p.startTime, p.endTime), Remark: p.description || '' };
     });
-    return { month, items, courses: s.courses };
+    return { month, items, courses: s.courses, ...(s.allCourses ? { allCourses: s.allCourses } : {}) };
   },
   createWorkDay:   (body)     => (API_CONFIG.USE_MOCK ? request('POST', '/work-days', body) : api.createSchedule(workToSchedule(body))),
   updateWorkDay:   (id, body) => (API_CONFIG.USE_MOCK ? request('PUT', `/work-days/${encodeURIComponent(id)}`, body) : api.updateSchedule(id, workToSchedule(body))),
