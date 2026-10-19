@@ -46,24 +46,27 @@ function claimDocHtml(c, u) {
   </div>`;
 }
 
-// แบบฟอร์มเปล่าของนักศึกษาช่วยงาน (เจ้าหน้าที่กำหนดให้กรอกด้วยลายมือ)
-function blankDocHtml() {
-  const rows = Array.from({ length: 12 }, () => '<tr><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+// แบบฟอร์มเปล่าของนักศึกษาช่วยงาน — วาดตามไฟล์จริง (assets/forms) ใช้เป็นภาพย่อ / พิมพ์หลายใบรวมกัน
+// c = คำขอ (เลือกภาคปกติ / ภาคพิเศษ ตาม sessionId) ; กรอกด้วยลายมือ
+function blankDocHtml(c) {
+  const f = blankFormOf(c);
+  const rows = Array.from({ length: 12 }, () => '<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
   return `<div class="doc">
-    ${docHead()}
-    <h4 class="doc-title">แบบบันทึกเวลาปฏิบัติงานนักศึกษาช่วยงาน</h4>
+    <div class="doc-head"><img src="assets/logo.png" alt="" class="doc-logo">
+      <div>แบบลงชื่อปฏิบัติงานและใบรับเงิน</div>
+      <div>หน่วยงาน โครงการปริญญาตรี${esc(f.label)} สาขาวิชาวิทยาการคอมพิวเตอร์</div>
+      <div>มหาวิทยาลัยธรรมศาสตร์</div></div>
     <table class="doc-info">
-      <tr><th>ชื่อ–นามสกุล</th><td>${blank('')}</td></tr>
-      <tr><th>เลขทะเบียนนักศึกษา</th><td>${blank('')}</td></tr>
-      <tr><th>ประจำเดือน</th><td>${blank('')}</td></tr>
+      <tr><th>ชื่อนักศึกษาผู้รับจ้างทำงาน นาย/นางสาว</th><td>${blank('')}</td></tr>
+      <tr><th>เลขทะเบียน</th><td>${blank('')}</td></tr>
+      <tr><th>ตามรายการงานจ้างนักศึกษา ระหว่างวันที่</th><td>${blank('')} ถึงวันที่ ${blank('')}</td></tr>
     </table>
-    <table class="doc-table five">
-      <thead><tr><th>วัน/เดือน/ปี</th><th>เวลาเข้า</th><th>เวลาออก</th><th>ลายเซ็น</th><th>ผู้ควบคุม</th></tr></thead>
+    <table class="doc-table">
+      <thead><tr><th>วันที่ปฏิบัติงาน</th><th>เวลาทำงาน</th><th>ลายมือชื่อผู้มาทำงาน</th><th>ชั่วโมง</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="doc-note">** กรอกด้วยลายมือ ปากกาน้ำเงินเท่านั้น</p>
-    <p class="doc-total">รวมเวลาปฏิบัติงาน ${blank('', 'short')} ชั่วโมง</p>
-    <div class="doc-sign"><div>( ${blank('')} )</div><div>ผู้ควบคุมการปฏิบัติงาน</div></div>
+    <p class="doc-note">ขอรับรองว่าข้อความดังกล่าวข้างต้นเป็นความจริง</p>
+    <div class="doc-sign"><div>ลงนาม ${blank('')} ผู้ควบคุมดูแล/ผู้จ่ายเงิน</div><div>ตำแหน่ง ผู้อำนวยการโครงการปริญญาตรี ${esc(f.label)}</div></div>
   </div>`;
 }
 

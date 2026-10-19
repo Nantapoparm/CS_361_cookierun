@@ -217,7 +217,8 @@ async function init() {
   try {
     claim = await api.adminClaim(id);
     // PDF จริงจาก Lambda (ถ้ามี) ; ไม่สำเร็จก็ยังตรวจจากตัวอย่างที่วาดเองได้
-    try { pdfUrl = (await api.getPdf(claim.claimId, claim.role === 'student_helper' ? 'blank' : 'claim'))?.downloadUrl || null; } catch { pdfUrl = null; }
+    if (claim.role === 'student_helper') pdfUrl = blankFormOf(claim).file; // แบบฟอร์มเปล่าเป็นไฟล์ในเว็บ
+    else { try { pdfUrl = (await api.getPdf(claim.claimId, 'claim'))?.downloadUrl || null; } catch { pdfUrl = null; } }
     render();
   } catch (err) {
     $('body').innerHTML = '';

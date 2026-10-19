@@ -5,7 +5,7 @@
 
 let user, claim, actions = [];
 const student = () => user.role === 'student_helper';
-const docHtml = () => (student() ? blankDocHtml() : claimDocHtml(claim, user));
+const docHtml = () => (student() ? blankDocHtml(claim) : claimDocHtml(claim, user));
 const AFTER_OK = ['approved', 'documents_received', 'sent_to_finance'];
 
 // ข้อความประวัติจาก claim_actions
@@ -139,8 +139,9 @@ function render(resubmitted) {
 
 async function download() {
   if (claim.printMethod === 'self_print' && claim.status === 'submitted') { toast('ดาวน์โหลดได้หลังเจ้าหน้าที่ตรวจผ่าน', true); return; }
+  if (student()) { window.open(blankFormOf(claim).file, '_blank', 'noopener'); return; }
   try {
-    const r = await api.getPdf(claim.claimId, student() ? 'blank' : 'claim');
+    const r = await api.getPdf(claim.claimId, 'claim');
     openDoc(r?.downloadUrl, docHtml(), docFileName(claim, user));
     actions = await api.getActions(claim.claimId).catch(() => actions);
   } catch (err) { toast(errorText(err), true); }

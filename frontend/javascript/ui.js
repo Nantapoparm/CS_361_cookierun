@@ -37,6 +37,26 @@ const OFFICE = {
   directorTitle: 'ผู้อำนวยการโครงการปริญญาตรีภาคพิเศษ'
 };
 
+// แบบฟอร์มเปล่าของนักศึกษาช่วยงาน (ไฟล์จริงของสาขา พิมพ์ไปกรอกด้วยลายมือ) แยกตามโครงการ (session)
+// sessionId ตามตาราง session: 1 = ภาคปกติ, 2 = ภาคพิเศษ — ไม่รู้ session ใช้ภาคปกติ
+const BLANK_FORMS = [
+  { sessionId: 1, label: 'ภาคปกติ', file: 'assets/forms/timesheet-regular.pdf', name: 'แบบลงชื่อปฏิบัติงาน_ภาคปกติ.pdf' },
+  { sessionId: 2, label: 'ภาคพิเศษ', file: 'assets/forms/timesheet-special.pdf', name: 'แบบลงชื่อปฏิบัติงาน_ภาคพิเศษ.pdf' }
+];
+const blankFormOf = (c) => BLANK_FORMS.find((f) => String(f.sessionId) === String(c?.sessionId)) || BLANK_FORMS[0];
+
+// การ์ดดาวน์โหลดแบบฟอร์มเปล่า (หน้าภาพรวมของนักศึกษาช่วยงาน)
+function blankFormsHtml() {
+  const tile = (f) => `<div class="choice form-tile">
+      <span class="ic" aria-hidden="true">📄</span>
+      <div><b>แบบฟอร์ม${esc(f.label)}</b><small>แบบลงชื่อปฏิบัติงานและใบรับเงิน · PDF A4</small>
+        <div class="form-btns"><a class="btn sm" href="${esc(f.file)}" download="${esc(f.name)}">ดาวน์โหลด</a></div></div>
+    </div>`;
+  return `<div class="card-head"><h3 id="formsTitle">แบบฟอร์มลงชื่อปฏิบัติงาน (เปล่า)</h3></div>
+    <p class="muted">พิมพ์แบบฟอร์มตามโครงการที่ทำงาน กรอกด้วยลายมือ ให้ผู้ควบคุมเซ็นรับรอง แล้วนำส่งเจ้าหน้าที่พร้อมคำขอ</p>
+    <div class="forms-grid">${BLANK_FORMS.map(tile).join('')}</div>`;
+}
+
 /* ---------- Stepper ----------
    sign_with_staff (5 ขั้น): ร่าง → ยื่น → ตรวจ → เซ็นเอกสาร → ส่งการเงิน
    self_print (6 ขั้น): ร่าง → ส่งตรวจ → ตรวจ → ปริ้น + เซ็น → นำส่งเอกสาร → ส่งการเงิน

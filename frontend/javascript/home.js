@@ -128,6 +128,8 @@ async function initHome() {
   $('hello').textContent = `สวัสดี ${displayName(user)}`;
   $('btnCal').textContent = user.role === 'instructor' ? 'ดูปฏิทินคาบสอน' : 'ดูปฏิทิน';
   $('thCourse').textContent = user.role === 'instructor' ? 'วิชา' : 'รายการ';
+  // นักศึกษาช่วยงาน: แบบฟอร์มเปล่าให้ดาวน์โหลด / พิมพ์เอง (ไฟล์ในเว็บ ไม่ต้องรอ API)
+  if (user.role === 'student_helper') { $('forms').innerHTML = blankFormsHtml(); $('forms').hidden = false; }
   load();
 }
 
