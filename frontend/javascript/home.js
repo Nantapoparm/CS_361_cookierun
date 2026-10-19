@@ -101,7 +101,8 @@ async function load() {
     const items = student ? month.items : month.periods.filter((x) => x.kind !== 'cancelled').map((x) => ({ ...x, hours: hoursBetween(x.startTime, x.endTime) }));
     const courses = month.courses;
     const round = {};
-    items.forEach((x) => { round[x.offeringId] = (round[x.offeringId] || 0) + Number(x.hours); });
+    // คาบจาก teaching_histories อาจไม่มี offeringId → หาวิชาด้วย sameOffering (เทียบ courseId) แล้วรวมตาม offeringId ของวิชา
+    items.forEach((x) => { const k = courses.find((c) => sameOffering(x, c))?.offeringId ?? x.offeringId; round[k] = (round[k] || 0) + Number(x.hours); });
     const ctx = { period, claims, rates, items, courses, round };
 
     $('eyebrow').textContent = `ภาพรวม · ภาคการศึกษาที่ ${period.semester}/${be(period.academicYear)}`;
