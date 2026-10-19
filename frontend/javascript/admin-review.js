@@ -59,7 +59,7 @@ const MARK = { ok: '✓', warn: '!', bad: '✕' };
 const ACTION_TH = {
   autofill: 'สร้างร่างจากปฏิทิน', created: 'สร้างร่าง (กรอกเอง)', preview: 'ผู้ขอดูตัวอย่าง PDF', submitted: 'ยื่นคำขอ', resubmitted: 'ยื่นใหม่',
   returned: 'ส่งกลับแก้ไข', approved: 'ตรวจผ่าน', rejected: 'ไม่อนุมัติ', printed: 'พิมพ์เอกสาร', documents_received: 'รับเอกสารแล้ว',
-  sent_to_finance: 'ส่งการเงิน', downloaded: 'ผู้ขอดาวน์โหลด PDF ฉบับตรวจผ่าน', print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่', makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
+  sent_to_finance: 'ส่งการเงิน', downloaded: 'ดาวน์โหลด PDF', print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่', makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
 };
 
 // กล่องการกระทำด้านขวา ตามสถานะ
@@ -113,7 +113,7 @@ function render() {
       <td data-label="เทียบตาราง"><span class="match ${MATCH[res][0]}">${esc(MATCH[res][1])}</span>${flagged.has(x.workId) ? ' <span class="match bad">เคยส่งกลับ</span>' : ''}</td>
     </tr>`).join('');
   // หมายเหตุของ autofill คือจำนวนคาบ (แสดงต่อท้าย) ; ของการส่งกลับ / ไม่อนุมัติ คือข้อความถึงผู้ขอ (แสดงเป็นคำพูด)
-  const hist = c.actions.map((a) => `<li><time>${esc(thShortTime(a.createdAt))}</time><span>${esc(a.actor ? `${a.actor} · ` : '')}${esc(ACTION_TH[a.action] || a.action)}${a.note ? (a.action === 'autofill' ? ` (${esc(a.note)})` : `<small>“${esc(a.note)}”</small>`) : ''}</span></li>`).join('') || '<li class="muted">ยังไม่มีประวัติ</li>';
+  const hist = c.actions.map((a) => `<li><time>${esc(thShortTime(a.createdAt))}</time><span>${esc(a.actor ? `${a.actor} · ` : '')}${esc(ACTION_TH[a.action] || 'อัปเดตคำขอ')}${a.note ? (a.action === 'autofill' ? ` (${esc(a.note)})` : `<small>“${esc(a.note)}”</small>`) : ''}</span></li>`).join('') || '<li class="muted">ยังไม่มีประวัติ</li>';
 
   $('body').innerHTML = `<div class="review-layout">
       <div class="review-main">
