@@ -153,8 +153,18 @@ function coursesOf(periods) {
   });
   return [...map.values()];
 }
+// รอบการเบิกของคำขอ: Lambda ไม่ส่ง deadline / cycle → คิดจากวันที่ยื่น ด้วยกฎเดียวกับ periodFromDate
+// (ยื่นวันที่ 1–5 = รอบ 1, 6–10 = รอบ 2, หลังวันที่ 10 = รอบ 1 ของเดือนถัดไป) ; ยังไม่ยื่น = รอบ 1 ของเดือนถัดจากงาน
+// submittedAt เป็นเวลา UTC → new Date() ได้วันที่ตามเวลาไทย
+const roundOf = (c) => {
+  if (c.deadline) return {};
+  const sub = c.submittedAt ? new Date(c.submittedAt) : null;
+  if (sub && !isNaN(sub)) { const p = periodFromDate(sub); return { deadline: p.deadline, cycle: p.cycle }; }
+  return c.month ? { deadline: `${addMonths(c.month, 1)}-05`, cycle: 1 } : {};
+};
 const normClaim = (c) => (c ? {
   ...c,
+  ...roundOf(c),
   claimId: (c.claimId ?? c.id) != null ? String(c.claimId ?? c.id) : null,
   term: `${c.semester}-${be(c.academicYear)}`,
   items: (c.items || []).map((x) => ({ ...x, startTime: hhmm(x.startTime), endTime: hhmm(x.endTime), workDate: String(x.workDate).slice(0, 10) }))
