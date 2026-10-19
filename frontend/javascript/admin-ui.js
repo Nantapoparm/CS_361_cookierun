@@ -24,7 +24,7 @@ function statusSub(c) {
 const statusCell = (c) => `${chip(c.status, c.printMethod)}<small>${esc(statusSub(c))}</small>`;
 
 // รอบการเบิกของคำขอ = เดือนของวันสิ้นสุดรับคำขอ + รอบที่ (1 | 2) → key '2026-11|1'
-const roundKey = (c) => `${String(c.deadline || '').slice(0, 7)}|${cycleOf(c)}`;
+const roundKey = (c) => `${String(c.month || '').slice(0, 7)}|${cycleOf(c)}`;
 const roundLabel = (key) => { const [m, cy] = key.split('|'); return `รอบที่ ${cy} · ${thMonth(m)}`; };
 
 // กลุ่มสถานะของแท็บนับ (approved แยกตามช่องทาง) — opt = แสดงเฉพาะเมื่อมีคำขอ
