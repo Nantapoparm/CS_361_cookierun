@@ -1,3 +1,14 @@
+"""
+POST /claims/{id}/submit
+ยื่นคำขอ: draft / returned -> submitted
+ผู้รับผิดชอบ: คนที่ 3 (V3-10 / V3-84)
+
+ความเปลี่ยนแปลงสำหรับ V3:
+  - ใช้ run_auth ระบุตัวตนผู้ใช้จาก Cognito JWT Token แทน Header X-User-Id
+  - รับค่า printMethod (sign_with_staff / self_print) บันทึกลง claims.printStatus
+  - เปลี่ยนสถานะผ่าน apply_transition() เพื่อลง Audit Log ใน claim_actions
+  - ตรวจสอบกฎธุรกิจครบถ้วน (วันเบิกซ้ำ, เพดานชั่วโมง/เงิน)
+"""
 from decimal import Decimal
 from db import run_auth, ok, parse_json_body, ApiError
 from validation import (

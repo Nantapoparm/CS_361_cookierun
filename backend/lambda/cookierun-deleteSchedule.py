@@ -1,5 +1,7 @@
 import json
 import os
+import datetime as dt
+from decimal import Decimal
 import pymysql
 
 DB_HOST = os.environ.get('DB_HOST')
@@ -22,6 +24,48 @@ def close_connection(connection):
     if connection and connection.open:
         connection.close()
 
+def _json_default(o):
+    if isinstance(o, (dt.datetime, dt.date)):
+        return o.isoformat()
+    if isinstance(o, Decimal):
+        return float(o)
+    return str(o)
+
+def ok(data):
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps({'success': True, 'data': data}, default=_json_default, ensure_ascii=False)
+    }
+
+def fail(status, code, message):
+    return {
+        'statusCode': status,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps({'success': False, 'error': {'code': code, 'message': message}}, ensure_ascii=False)
+    }
+
+def get_user_id(connection, event):
+    claims = (((event.get('requestContext') or {}).get('authorizer') or {}).get('jwt') or {}).get('claims') or {}
+    sub = str(claims.get('sub') or '').strip()
+    if not sub:
+        return None
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT userId FROM user_information WHERE cognitoSub = %s", (sub,))
+        row = cursor.fetchone()
+    return row['userId'] if row else None
+
+def update_schedule(connection, historyId, userId, courseId, startTime, endTime, description, room):
+    with connection.cursor() as cursor:
+        sql = """
+            UPDATE teaching_histories 
+            SET courseId = %s, startTime = %s, endTime = %s, description = %s, room = %s
+            WHERE historyId = %s AND userId = %s
+        """
+        cursor.execute(sql, (courseId, startTime, endTime, description, room, historyId, userId))
+        connection.commit()
+        return cursor.rowcount
+
 def delete_schedule(connection, historyId, userId):
     with connection.cursor() as cursor:
         sql = "DELETE FROM teaching_histories WHERE historyId = %s AND userId = %s"
@@ -32,40 +76,50 @@ def delete_schedule(connection, historyId, userId):
 def lambda_handler(event, context):
     connection = None
     try:
-        request_context = event.get('requestContext', {})
-        authorizer = request_context.get('authorizer', {})
-        userId = authorizer.get('userId') or authorizer.get('claims', {}).get('sub')
+        connection = open_connection()
+        userId = get_user_id(connection, event)
+        if not userId:
+            return fail(403, 'FORBIDDEN', 'ไม่พบผู้ใช้ที่ผูกกับบัญชีนี้')
 
+        route_key = event.get('routeKey', '')
         path_params = event.get('pathParameters') or {}
         historyId = path_params.get('id')
+
+        if not historyId:
+            return fail(400, 'VALIDATION_ERROR', 'กรุณาระบุ ID ของคาบสอน')
 
         body = event.get('body', '{}')
         if isinstance(body, str):
             body = json.loads(body)
-            
-        if not userId:
-            userId = body.get('userId')
 
-        if not historyId or not userId:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'ข้อมูล ID หรือ userId ไม่ครบถ้วน'})
-            }
+        if 'PUT' in route_key:
+            courseId = body.get('courseId')
+            startTime = body.get('startTime')
+            endTime = body.get('endTime')
+            description = body.get('description', '')
+            room = body.get('room', '')
 
-        connection = open_connection()
-        rowcount = delete_schedule(connection, historyId, userId)
+            if not all([courseId, startTime, endTime]):
+                return fail(400, 'VALIDATION_ERROR', 'กรุณาส่งข้อมูล courseId, startTime และ endTime ให้ครบถ้วน')
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'ลบคาบสอนสำเร็จ!', 'affectedRows': rowcount})
-        }
+            rowcount = update_schedule(connection, historyId, userId, courseId, startTime, endTime, description, room)
+            if rowcount == 0:
+                return fail(404, 'NOT_FOUND', 'ไม่พบข้อมูลคาบสอน หรือคุณไม่มีสิทธิ์แก้ไข')
+
+            return ok({'message': 'แก้ไขคาบสอนสำเร็จ!'})
+
+        elif 'DELETE' in route_key:
+            rowcount = delete_schedule(connection, historyId, userId)
+            if rowcount == 0:
+                return fail(404, 'NOT_FOUND', 'ไม่พบข้อมูลคาบสอน หรือคุณไม่มีสิทธิ์ลบ')
+
+            return ok({'message': 'ลบคาบสอนสำเร็จ!'})
+
+        return fail(404, 'NOT_FOUND', 'ไม่พบ Route ที่ต้องการ')
 
     except Exception as e:
         print(f"เกิดข้อผิดพลาด: {e}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
-        
+        return fail(500, 'INTERNAL_ERROR', 'เกิดข้อผิดพลาดภายในระบบ')
+
     finally:
         close_connection(connection)

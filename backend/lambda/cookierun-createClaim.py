@@ -1,182 +1,122 @@
-
+import re
+import datetime as dt
+from decimal import Decimal
 from db import run_auth, ok, parse_json_body, ApiError
 from validation import (
     STATUS_DRAFT,
+    MAX_NOTE_LENGTH,
     get_user,
-    parse_term,
-    validate_work_items,
-    validate_billing_cycle,
+    get_offering,
     write_work_items,
     build_claims,
-    create_course_offering,
-    handle_create_course_offering,
 )
 
 
 def lambda_handler(event, context):
-    request_context = event.get("requestContext") or {}
-    http = request_context.get("http") or {}
+    return run_auth(event, lambda conn, auth: _create(conn, auth["userId"], event))
 
-    method = (event.get("httpMethod") or http.get("method") or "").upper()
-    path = (
-        event.get("resource")
-        or event.get("rawPath")
-        or event.get("path")
-        or ""
-    ).rstrip("/")
 
-    # รองรับ Route พิเศษ /course-offerings หากส่งเข้ามาที่ Lambda ตัวนี้
-    if path == "/course-offerings" and method in ("POST", "OPTIONS"):
-        return handle_create_course_offering(event)
+def parse_offering_id(value):
+    if isinstance(value, bool) or not re.fullmatch(r"\d+", str(value or "").strip()):
+        raise ApiError(400, "กรุณาระบุ offeringId เป็นจำนวนเต็ม")
+    return int(str(value).strip())
 
-    # Route หลัก POST /claims
-    if path == "/claims" and method in ("POST", "OPTIONS"):
-        return run_auth(event, lambda conn, auth: _create(conn, auth["userId"], event))
 
-    return {
-        "statusCode": 404,
-        "headers": {"Content-Type": "application/json"},
-        "body": '{"success":false,"error":{"code":"NOT_FOUND","message":"Route not found"}}',
-    }
+def parse_month(value):
+    month = str(value or "").strip()
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise ApiError(400, "กรุณาระบุ month ในรูปแบบ YYYY-MM")
+    return month
+
+
+def parse_time(value, field):
+    # รับ "09:30" หรือ "09:30:00"
+    m = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?", str(value or "").strip())
+    if not m:
+        raise ApiError(400, f"{field} ต้องเป็นรูปแบบ HH:MM")
+    return dt.time(int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+
+
+def parse_items(items, month, offering):
+    if not isinstance(items, list) or not items:
+        raise ApiError(400, "items ต้องเป็น array และมีอย่างน้อย 1 รายการ")
+    rows = []
+    for i, item in enumerate(items, start=1):
+        label = f"แถวที่ {i}"
+        if not isinstance(item, dict):
+            raise ApiError(400, f"{label}: ต้องเป็น object")
+        try:
+            work_date = dt.date.fromisoformat(str(item.get("workDate") or "").strip())
+        except ValueError:
+            raise ApiError(400, f"{label}: workDate ต้องเป็นรูปแบบ YYYY-MM-DD")
+        if work_date.strftime("%Y-%m") != month:
+            raise ApiError(400, f"{label}: วันที่ต้องอยู่ในเดือน {month}")
+        start = parse_time(item.get("startTime"), f"{label}: startTime")
+        end = parse_time(item.get("endTime"), f"{label}: endTime")
+        if end <= start:
+            raise ApiError(400, f"{label}: เวลาสิ้นสุดต้องหลังเวลาเริ่ม")
+        remark = item.get("Remark", item.get("remark")) or ""
+        if not isinstance(remark, str):
+            raise ApiError(400, f"{label}: Remark ต้องเป็นข้อความ")
+        remark = remark.strip()
+        if len(remark) > MAX_NOTE_LENGTH:
+            raise ApiError(400, f"{label}: หมายเหตุต้องไม่เกิน {MAX_NOTE_LENGTH} ตัวอักษร")
+        minutes = (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
+        rows.append({
+            "workDate": work_date,
+            "startTime": start,
+            "endTime": end,
+            "hours": (Decimal(minutes) / Decimal(60)).quantize(Decimal("0.01")),
+            "remark": remark,
+            "offeringId": offering["offeringId"],
+            "sessionId": offering["sessionId"],
+        })
+
+    # คาบวันเดียวกันห้ามเวลาซ้อนกัน
+    rows.sort(key=lambda r: (r["workDate"], r["startTime"]))
+    for a, b in zip(rows, rows[1:]):
+        if a["workDate"] == b["workDate"] and b["startTime"] < a["endTime"]:
+            raise ApiError(400, f"วันที่ {a['workDate']} มีคาบเวลาซ้อนกัน")
+    return rows
 
 
 def _create(conn, user_id, event):
     body = parse_json_body(event)
     get_user(conn, user_id)
+    offering_id = parse_offering_id(body.get("offeringId"))
+    month = parse_month(body.get("month"))
 
-    # 1. ตรวจสอบ term
-    term = body.get("term")
-    if not isinstance(term, str) or not term.strip():
-        raise ApiError(400, "ต้องระบุ term เช่น 1-2569")
+    offering = get_offering(conn, offering_id)
+    if not offering:
+        raise ApiError(404, "ไม่พบรายวิชานี้ในระบบ")
 
-    term = term.strip()
-    sem_val, year_val = parse_term(term)  # แปลง term (รองรับ ACADEMIC_YEAR_OFFSET)
+    rows = parse_items(body.get("items"), month, offering)
 
-    # 2. ตรวจสอบ billingCycle
-    if body.get("billingCycle") is None:
-        raise ApiError(400, "ต้องระบุ billingCycle")
-
-    validate_billing_cycle(body)
-
-    # 3. จัดการรายการ items (ถ้ามี)
-    items = body.get("items")
-    rows = []
-
-    if items is not None:
-        if not isinstance(items, list):
-            raise ApiError(400, "items ต้องเป็น array")
-
-        course_codes = {}
-        course_names = set()
-
-        for i, item in enumerate(items, start=1):
-            label = f"items[{i}]"
-
-            if not isinstance(item, dict):
-                raise ApiError(400, f"{label} ต้องเป็น object")
-
-            code = item.get("courseCode")
-            if not isinstance(code, str) or not code.strip():
-                raise ApiError(400, f"{label}: ต้องระบุ courseCode")
-
-            code = code.strip()
-            if len(code) > 30:
-                raise ApiError(400, f"{label}: courseCode ยาวเกิน 30 ตัวอักษร")
-
-            course_codes.setdefault(code.casefold(), code)
-
-            # ตรวจสอบชื่อวิชา (ถ้ามี)
-            name = item.get("courseName", code)
-            if isinstance(name, str):
-                name = name.strip()
-                if len(name) > 255:
-                    raise ApiError(400, f"{label}: courseName ยาวเกิน 255 ตัวอักษร")
-                if name:
-                    course_names.add(name)
-
-        if len(course_codes) > 1:
-            raise ApiError(
-                400,
-                "ทุกรายการในคำขอเดียวกันต้องเป็นวิชา (courseCode) เดียวกัน",
-            )
-
-        if len(course_names) > 1:
-            raise ApiError(
-                400,
-                "ทุกรายการในคำขอเดียวกันต้องใช้ชื่อวิชา (courseName) เดียวกัน",
-            )
-
-        # หากมีวิชาส่งมา ให้ตรวจสอบ/สร้างใน DB
-        if course_codes:
-            course_code = next(iter(course_codes.values()))
-            course_name = next(iter(course_names), course_code)
-
-            with conn.cursor() as cur:
-                # 3.1 ค้นหาการเปิดสอนวิชานี้ในเทอมดังกล่าว
-                cur.execute(
-                    """
-                    SELECT offeringId FROM course_offerings 
-                    WHERE courseId = %s AND academicYear = %s AND semester = %s
-                    """,
-                    (course_code, year_val, sem_val),
-                )
-                offering = cur.fetchone()
-
-                # หากยังไม่มี ให้เปิดสอนวิชานี้ให้อัตโนมัติ
-                if offering is None:
-                    create_course_offering(
-                        conn,
-                        {
-                            "courseCode": course_code,
-                            "term": term,
-                        },
-                    )
-
-                # 3.2 บันทึก/อัปเดตชื่อวิชาลงตาราง courses_name
-                cur.execute(
-                    """
-                    SELECT courseId FROM courses_name WHERE courseId = %s
-                    """,
-                    (course_code,),
-                )
-                db_course = cur.fetchone()
-
-                if db_course:
-                    cur.execute(
-                        """
-                        UPDATE courses_name 
-                        SET courseName = %s 
-                        WHERE courseId = %s
-                        """,
-                        (course_name, course_code),
-                    )
-                else:
-                    cur.execute(
-                        """
-                        INSERT INTO courses_name (courseId, courseName) 
-                        VALUES (%s, %s)
-                        """,
-                        (course_code, course_name),
-                    )
-
-        # 3.3 ตรวจสอบความถูกต้องของรายการงานที่จะเขียนลง DB
-        rows, _ = validate_work_items(conn, items, term)
-
-    # 4. บันทึกคำขอลงตาราง claims ( statusId = 1 / Draft )
     with conn.cursor() as cur:
+        # 1 วิชา / 1 เดือน มีได้ 1 คำขอ (ยกเว้นใบที่ถูกปฏิเสธ)
+        cur.execute(
+            """SELECT c.claimId
+               FROM claims c
+               JOIN `status` st ON st.statusId = c.statusId
+               JOIN work_information w ON w.claimId = c.claimId
+               WHERE c.userId = %s AND w.offeringId = %s
+                 AND DATE_FORMAT(w.workDate, '%%Y-%%m') = %s
+                 AND st.statusName <> 'Rejected'
+               LIMIT 1""",
+            (user_id, offering_id, month),
+        )
+        dup = cur.fetchone()
+        if dup:
+            raise ApiError(409, f"มีคำขอ #{dup['claimId']} ของวิชานี้ในเดือน {month} อยู่แล้ว")
+
+        # dayClaim ตั้งตอนยื่น (submitClaim)
         cur.execute(
             "INSERT INTO claims (userId, statusId) VALUES (%s, %s)",
             (user_id, STATUS_DRAFT),
         )
         claim_id = cur.lastrowid
 
-    # 5. เขียนรายการงานลงตาราง work_information (ถ้ามี)
-    if rows:
-        write_work_items(conn, claim_id, user_id, rows)
-
-    # 6. คืนค่าผลลัพธ์รูปแบบ Swagger
-    data = build_claims(conn, [claim_id])[0]
-    result = ok(201, data)
+    write_work_items(conn, claim_id, user_id, rows)
     conn.commit()
 
-    return result
+    return ok(201, build_claims(conn, [claim_id])[0])

@@ -1,4 +1,13 @@
 
+"""
+GET /rates
+ดึงอัตราค่าตอบแทนต่อบทบาท (เฉพาะ session ที่ตั้งไว้ ค่าเริ่มต้น normal)
+ผู้รับผิดชอบ: คนที่ 3 (V3-07 / V3-84)
+
+ความเปลี่ยนแปลงสำหรับ V3:
+  - ใช้ run_auth เพื่อระบุตัวตนและตรวจสอบสิทธิ์จาก Cognito JWT Token
+  - คืนค่าอัตราค่าตอบแทนและเพดานชั่วโมงตรงตามรูปแบบ Swagger
+"""
 from db import run_auth, ok
 from validation import role_key, session_name
 

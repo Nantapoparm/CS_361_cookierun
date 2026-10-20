@@ -1,3 +1,13 @@
+"""
+GET /claims/{id}
+ดึงรายละเอียดคำขอฉบับเดียว (รูปแบบเดียวกับ Swagger)
+ผู้รับผิดชอบ: คนที่ 3 (V3-07 / V3-84)
+
+ความเปลี่ยนแปลงสำหรับ V3:
+  - ใช้ run_auth ระบุตัวตนผู้ใช้จาก Cognito JWT Token แทน Header X-User-Id
+  - อนุญาตให้ Admin ดูรายละเอียดได้ทุกคำขอ ส่วนผู้ใช้ทั่วไปดูได้เฉพาะของตนเอง
+  - คืนค่าผลลัพธ์ผ่าน build_claims() รูปแบบมาตรฐาน V3
+"""
 from db import run_auth, ok, ApiError
 from validation import (
     path_claim_id,

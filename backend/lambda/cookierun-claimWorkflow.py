@@ -1,4 +1,12 @@
+"""
+Lambda Function: cookierun-claimWorkflow
+รองรับ Endpoints เกี่ยวกับ Workflow ฝั่งผู้ใช้ใน V3:
+  1. PUT /claims/{id}/print-method  -> update_print_method (เปลี่ยนช่องทางยื่น)
+  2. GET /claims/{id}/actions       -> list_claim_actions (ดูประวัติการดำเนินการ)
 
+ผู้รับผิดชอบ: คนที่ 3 (V3-10 / V3-84)
+Lambda URI ใน openapi.yaml: cookierun-claimWorkflow
+"""
 import os
 from db import run_auth, ok, parse_json_body, ApiError, to_utc_z
 from validation import (

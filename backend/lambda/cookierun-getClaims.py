@@ -1,4 +1,3 @@
-
 from db import run_auth, ok, ApiError
 from validation import (
     STATUS_DRAFT,

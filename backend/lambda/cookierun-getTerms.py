@@ -1,3 +1,13 @@
+"""
+GET /terms
+ดึงรายการภาคการศึกษาและรอบการเบิก (ใช้กับ Dropdown เลือกเทอม)
+ผู้รับผิดชอบ: คนที่ 3 (V3-07 / V3-84)
+
+ความเปลี่ยนแปลงสำหรับ V3:
+  - ใช้ run_auth เพื่อระบุตัวตนผู้ใช้จาก Cognito JWT Token
+  - แปลงปีการศึกษา ค.ศ. -> พ.ศ. ตาม ACADEMIC_YEAR_OFFSET ผ่าน term_label()
+  - คืนข้อมูลโครงสร้างมาตรฐาน Swagger
+"""
 from db import run_auth, ok
 from validation import term_label, billing_cycles, default_term
 

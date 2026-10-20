@@ -1,3 +1,13 @@
+"""
+GET /uploads/presigned-url
+ขอ S3 Presigned URL (PUT) สำหรับอัปโหลดไฟล์หลักฐานตรงไปที่ S3
+ผู้รับผิดชอบ: คนที่ 3 (V3-07 / V3-84)
+
+ความเปลี่ยนแปลงสำหรับ V3:
+  - ใช้ run_auth เพื่อระบุตัวตนผู้ใช้จาก Cognito JWT Token
+  - สร้าง S3 Presigned URL รูปแบบ PUT อายุ 300 วินาที
+  - คืนค่า uploadUrl และ fileKey ตรงตาม openapi.yaml
+"""
 import os
 import re
 import uuid
