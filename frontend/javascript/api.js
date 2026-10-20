@@ -181,6 +181,17 @@ function workToSchedule(b) {
   };
 }
 
+// ประวัติคำขอ (claims_histories): ชื่อ action ของ Lambda → ชื่อที่หน้าเว็บใช้ ; ข้อความไม่ให้มีคำสั่ง / key ภาษาอังกฤษ
+const ACTION_ALIAS = { print_method_changed: 'print_method', pdf_downloaded: 'downloaded' };
+// action ที่ชื่อบอกครบแล้ว ไม่ต้องแสดงหมายเหตุที่ระบบเขียน (เช่น "เปลี่ยนช่องทางยื่นจาก self_print เป็น sign_with_staff")
+const SYSTEM_NOTE_ACTIONS = ['print_method', 'downloaded', 'printed'];
+function normAction(a) {
+  const action = ACTION_ALIAS[a.action] || a.action;
+  const note = SYSTEM_NOTE_ACTIONS.includes(action) ? null
+    : String(a.note || '').replace(/(sign_with_staff|self_print)/g, (k) => PRINT_METHOD[k].short).trim() || null;
+  return { ...a, action, note };
+}
+
 /* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
   // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle }
@@ -244,7 +255,7 @@ const api = {
   updateClaim:     async (id, body) => normClaim(await request('PUT',  `/claims/${encodeURIComponent(id)}`, body)),
   submitClaim:     async (id, printMethod) => normClaim(await request('POST', `/claims/${encodeURIComponent(id)}/submit`, { printMethod })),
   setPrintMethod:  async (id, printMethod) => normClaim(await request('PUT', `/claims/${encodeURIComponent(id)}/print-method`, { printMethod })),
-  getActions:      (id)       => request('GET', `/claims/${encodeURIComponent(id)}/actions`),
+  getActions:      async (id) => ((await request('GET', `/claims/${encodeURIComponent(id)}/actions`)) || []).map(normAction),
   // type = claim | makeup | blank → { downloadUrl, expiresIn } (mock: downloadUrl = null → หน้าเว็บวาดตัวอย่างเอง)
   getPdf:          (id, type = 'claim', extra = {}) => request('GET', `/claims/${encodeURIComponent(id)}/pdf` + qs({ type, ...extra })),
 
@@ -256,7 +267,7 @@ const api = {
   // รายละเอียดสำหรับตรวจ: claim + schedule (คาบในตารางสอนของเดือนนั้น), termHours, maxHours, duplicates, actions
   adminClaim: async (id) => {
     const d = await request('GET', `/admin/claims/${encodeURIComponent(id)}`);
-    return { ...normClaim(d), schedule: (d.schedule || []).map(normPeriod), actions: d.actions || [] };
+    return { ...normClaim(d), schedule: (d.schedule || []).map(normPeriod), actions: (d.actions || []).map(normAction) };
   },
   // decision = approve | reject | return ; reject / return ต้องมี note ; workIds = แถวที่ต้องแก้ (return)
   reviewClaim:     async (id, decision, note = '', workIds = []) => normClaim(await request('POST', `/admin/claims/${encodeURIComponent(id)}/review`, { decision, note, workIds })),

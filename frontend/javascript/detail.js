@@ -23,10 +23,10 @@ function actionText(a) {
     printed: `${a.actor} พิมพ์เอกสารแล้ว`,
     documents_received: `${a.actor} รับเอกสารฉบับเซ็นแล้ว`,
     sent_to_finance: `${a.actor} ส่งการเงินแล้ว`,
-    downloaded: 'ดาวน์โหลด PDF ฉบับตรวจผ่าน',
+    downloaded: `${a.actor ? `${a.actor} ` : ''}ดาวน์โหลด PDF`,
     print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่',
     makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
-  }[a.action] || a.action;
+  }[a.action] || 'อัปเดตคำขอ';
 }
 const lastAction = (name) => actions.find((a) => a.action === name);
 
