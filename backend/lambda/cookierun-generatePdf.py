@@ -1,188 +1,113 @@
-import json
-import os
-import re
-import datetime as dt
-from decimal import Decimal
-import pymysql
-
-DB_HOST = os.environ.get('DB_HOST')
-DB_USER = os.environ.get('DB_USER')
-DB_PASSWORD = os.environ.get('DB_PASSWORD')
-DB_NAME = os.environ.get('DB_NAME')
-
-KINDS = {
-    'regular': 'regular', 'ตามตาราง': 'regular', 'ปกติ': 'regular',
-    'cancelled': 'cancelled', 'canceled': 'cancelled', 'งดสอน': 'cancelled',
-    'makeup': 'makeup', 'make-up': 'makeup', 'สอนชดเชย': 'makeup', 'ชดเชย': 'makeup',
-}
-
-def kind_of(description):
-    return KINDS.get(str(description or '').strip().lower(), 'regular')
-
-def open_connection():
-    return pymysql.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=5
-    )
-
-def close_connection(connection):
-    if connection and connection.open:
-        connection.close()
-
-def _json_default(o):
-    if isinstance(o, (dt.datetime, dt.date)):
-        return o.isoformat()
-    if isinstance(o, Decimal):
-        return float(o)
-    return str(o)
-
-def ok(data):
-    return {
-        'statusCode': 200,
-        'headers': {'Content-Type': 'application/json'},
-        'body': json.dumps({'success': True, 'data': data}, default=_json_default, ensure_ascii=False)
-    }
-
-def fail(status, code, message):
-    return {
-        'statusCode': status,
-        'headers': {'Content-Type': 'application/json'},
-        'body': json.dumps({'success': False, 'error': {'code': code, 'message': message}}, ensure_ascii=False)
-    }
-
-def get_user_id(connection, event):
-    claims = (((event.get('requestContext') or {}).get('authorizer') or {}).get('jwt') or {}).get('claims') or {}
-    sub = str(claims.get('sub') or '').strip()
-    if not sub:
-        return None
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT userId FROM user_information WHERE cognitoSub = %s", (sub,))
-        row = cursor.fetchone()
-    return row['userId'] if row else None
-
-
-OFFERING_OF_PERIOD = """
-    (SELECT co.offeringId FROM course_offerings co
-     WHERE co.courseId = t.courseId
-       AND (t.sessionId IS NULL OR co.sessionId = t.sessionId)
-     ORDER BY
-       (co.semester = CASE WHEN MONTH(t.startTime) >= 8 THEN 1
-                           WHEN MONTH(t.startTime) <= 5 THEN 2 ELSE 3 END
-        AND co.academicYear = YEAR(t.startTime) + 543 - (MONTH(t.startTime) < 8)) DESC,
-       co.academicYear DESC, co.semester DESC
-     LIMIT 1)
 """
+Lambda Function: cookierun-generatePdf
+GET /claims/{id}/pdf?type=claim|makeup|blank
+สร้าง PDF แล้วเก็บใน S3 (bucket หลักฐาน) และคืน Presigned URL อายุสั้น
 
-def get_teaching_histories_by_month(connection, userId, target_month):
-    with connection.cursor() as cursor:
-        sql = f"""
-            SELECT
-                t.historyId,
-                t.courseId,
-                c.courseName,
-                t.startTime,
-                t.endTime,
-                t.description,
-                t.room,
-                t.sessionId,
-                {OFFERING_OF_PERIOD} AS offeringId
-            FROM teaching_histories t
-            LEFT JOIN courses_name c ON t.courseId = c.courseId
-            WHERE t.userId = %s AND DATE_FORMAT(t.startTime, '%%Y-%%m') = %s
-            ORDER BY t.startTime ASC
-        """
-        cursor.execute(sql, (userId, target_month))
-        rows = cursor.fetchall()
+Handler: generate_pdf.lambda_handler
+ต้องมีในแพ็กเกจ/Layer: db.py, validation.py, pdf.py, pymysql, fpdf2, uharfbuzz, pypdf
+env: UPLOADS_BUCKET (บังคับ), DB_*, DIRECTOR_NAME (ไม่บังคับ), PDF_URL_EXPIRES (วินาที ค่าเริ่มต้น 300)
+"""
+import os
 
-    for r in rows:
-        r['kind'] = kind_of(r.get('description'))
-        # [แก้] ล้างเฉพาะคำที่เป็นประเภทคาบ — หมายเหตุของนักศึกษาช่วยงานเก็บในคอลัมน์นี้ด้วย
-        if str(r.get('description') or '').strip().lower() in KINDS:
-            r['description'] = ''
+import boto3
+from botocore.config import Config
 
-    total_count = len(rows)
+import pdf
+from db import ApiError, ok, run_auth
+from validation import (
+    build_claims,
+    load_claim_any,
+    path_claim_id,
+    year_offset,
+)
 
-    return rows, total_count
+_s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
 
-# [เพิ่ม] offeringId ทั้งหมดที่ผู้ใช้คนนี้มีคาบอยู่ (ทุกเดือน ไม่แยก role)
-def get_my_offering_ids(connection, userId):
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"""SELECT DISTINCT {OFFERING_OF_PERIOD} AS offeringId
-                FROM teaching_histories t
-                WHERE t.userId = %s""",
-            (userId,),
-        )
-        return [r['offeringId'] for r in cursor.fetchall() if r['offeringId'] is not None]
+# สถานะที่เจ้าหน้าที่ตรวจผ่านแล้ว: ออกฉบับพิมพ์จริง (ไม่มีลายน้ำ)
+FINAL_STATUSES = ("approved", "documents_received", "sent_to_finance")
+# สถานะที่ยังไม่ผ่านการตรวจ: ออกได้เฉพาะฉบับตัวอย่าง (ลายน้ำ "ตัวอย่าง")
+PREVIEW_STATUSES = ("draft", "submitted", "returned")
+# rejected ไม่ออกเอกสาร -> 409
 
-# [เพิ่ม] ภาคของเดือน (กฎเดียวกับ termOfDate ในหน้าเว็บ) : '2026-10' → (1, 2569)
-def term_of_month(target_month):
-    year, mon = int(target_month[:4]), int(target_month[5:7])
-    semester = 1 if mon >= 8 else 2 if mon <= 5 else 3
-    return semester, year + 543 - (1 if mon < 8 else 0)
+URL_EXPIRES = int(os.environ.get("PDF_URL_EXPIRES", "300"))
 
-# [แก้] ทุกวิชาที่เปิดในภาคของเดือนที่ขอ (ยังไม่มีภาคนั้นในตาราง → ภาคล่าสุด)
-def get_all_courses(connection, target_month):
-    semester, academic_year = term_of_month(target_month)
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """SELECT 1 FROM course_offerings WHERE semester = %s AND academicYear = %s LIMIT 1""",
-            (semester, academic_year),
-        )
-        if not cursor.fetchone():
-            cursor.execute("""SELECT semester, academicYear FROM course_offerings
-                              ORDER BY academicYear DESC, semester DESC LIMIT 1""")
-            latest = cursor.fetchone()
-            if not latest:
-                return []
-            semester, academic_year = latest['semester'], latest['academicYear']
-        cursor.execute(
-            """SELECT co.courseId, c.courseName, co.offeringId, co.sessionId, co.semester, co.academicYear
-               FROM course_offerings co
-               LEFT JOIN courses_name c ON co.courseId = c.courseId
-               WHERE co.semester = %s AND co.academicYear = %s
-               ORDER BY co.courseId""",
-            (semester, academic_year),
-        )
-        return cursor.fetchall()
 
 def lambda_handler(event, context):
-    connection = None
-    try:
-        query_params = event.get('queryStringParameters') or {}
-        target_month = str(query_params.get('month') or '').strip()
-        if not re.fullmatch(r'\d{4}-\d{2}', target_month):
-            return fail(400, 'VALIDATION_ERROR', 'month ต้องเป็นรูปแบบ YYYY-MM')
+    return run_auth(event, lambda conn, auth: _handle(conn, auth, event))
 
-        connection = open_connection()
-        userId = get_user_id(connection, event)
-        if not userId:
-            return fail(403, 'FORBIDDEN', 'ไม่พบผู้ใช้ที่ผูกกับบัญชีนี้')
 
-        periods, count = get_teaching_histories_by_month(connection, userId, target_month)
-        all_courses = get_all_courses(connection, target_month)
-        my_offering_ids = get_my_offering_ids(connection, userId)  # [เพิ่ม]
+def _handle(conn, auth, event):
+    params = event.get("queryStringParameters") or {}
+    kind = (params.get("type") or "claim").strip().lower()
+    if kind not in ("claim", "makeup", "blank"):
+        raise ApiError(400, "type ต้องเป็น claim, makeup หรือ blank")
+    if kind == "makeup":
+        raise ApiError(400, "ยังไม่รองรับแบบฟอร์มขอสอนชดเชย (type=makeup)")
 
-        return ok({
-            'month': target_month,
-            'count': count,
-            'periods': periods,
-            # [แก้] courses = วิชาที่ผู้ใช้มีคาบ (กล่องสรุป / หน้าภาพรวม / แท็บสร้างคำขอ)
-            'courses': [c for c in all_courses if c['offeringId'] in my_offering_ids],
-            # [เพิ่ม] allCourses = ทุกวิชาในภาค ใช้เป็นตัวเลือกตอนเพิ่มคาบ (คนที่ยังไม่มีคาบจะได้เพิ่มคาบแรกได้)
-            'allCourses': all_courses,
-            'offeringIds': my_offering_ids,  # [เพิ่ม]
-        })
+    claim_id = path_claim_id(event)
+    claim = load_claim_any(conn, claim_id)  # ไม่พบ = 404
+    if claim["userId"] != auth["userId"] and not auth["isAdmin"]:
+        raise ApiError(403, "ไม่มีสิทธิ์เข้าถึงคำขอนี้")
 
-    except Exception as e:
-        print(f"เกิดข้อผิดพลาด: {e}")
-        return fail(500, 'INTERNAL_ERROR', 'เกิดข้อผิดพลาดภายในระบบ')
+    info = build_claims(conn, [claim_id])
+    if not info:
+        raise ApiError(404, "ไม่พบคำขอ")
+    c = info[0]
+    role = c["role"]
 
-    finally:
-        close_connection(connection)
+    # นักศึกษาช่วยงานได้ฟอร์มเปล่าเสมอ (เขียนลายมือ) แม้ขอ type=claim
+    if kind == "blank" or role == "student_helper":
+        body = pdf.generate_blank_pdf(role)
+        key = f"pdf/blank-{role}.pdf"
+    else:
+        status = c["status"]
+        if status in FINAL_STATUSES:
+            preview = False
+        elif status in PREVIEW_STATUSES:
+            preview = True
+        else:
+            raise ApiError(409, f"สถานะ {status} ไม่สามารถออกเอกสารได้")
+        body = pdf.generate_pdf_from_template(_build_data(c), role, preview=preview)
+        key = f"pdf/c{claim_id:03d}{'-preview' if preview else ''}.pdf"
 
+    bucket = os.environ.get("UPLOADS_BUCKET")
+    if not bucket:
+        raise ApiError(500, "ยังไม่ได้ตั้งค่า UPLOADS_BUCKET", code="INTERNAL_ERROR")
+    _s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/pdf")
+    url = _s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": key, "ResponseContentType": "application/pdf"},
+        ExpiresIn=URL_EXPIRES,
+    )
+    return ok(200, {"downloadUrl": url, "expiresIn": URL_EXPIRES})
+
+
+def _build_data(c):
+    """ประกอบ dict data ให้ pdf.generate_pdf_from_template จากผล build_claims"""
+    items = c.get("items") or []
+    is_ta = pdf.is_ta_role(c["role"])
+    first_date = items[0]["workDate"] if items else None
+    year = c.get("academicYear")
+
+    rows = [
+        {
+            "date": pdf.thai_date(i["workDate"]),
+            "time": pdf.format_time_range(i["startTime"], i["endTime"], i["hours"]),
+            "note": i.get("Remark") or "",
+            "hours": i["hours"],
+        }
+        for i in items
+    ]
+    return {
+        "semester": c.get("semester"),
+        # academicYear ใน DB + ส่วนต่าง = ปี พ.ศ. (offset 0 = DB เก็บ พ.ศ. อยู่แล้ว)
+        "academicYearBE": (year + year_offset()) if year is not None else "",
+        "courseLine": f"{c.get('courseId') or ''} {c.get('courseName') or ''}".strip().upper(),
+        "lecturer": None if is_ta else c.get("requesterName"),
+        "taName": c.get("requesterName") if is_ta else None,
+        "monthLabel": pdf.thai_month_label(first_date) if first_date else "",
+        "courseKind": None,  # TODO: ติ๊กภาคทฤษฎี/ปฏิบัติ ต้องอ่านจาก teaching_histories (type)
+        "rows": rows,
+        "totalHours": c.get("totalHours"),
+        "directorName": os.environ.get("DIRECTOR_NAME") or None,
+    }
