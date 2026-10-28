@@ -16,7 +16,6 @@
 #   ORIGIN         origin ที่ควรได้รับอนุญาต (ค่าเริ่มต้น: CloudFront ของทีม)
 #   LOCAL_ORIGIN   origin localhost ที่ควรได้รับอนุญาต
 #   BAD_ORIGIN     origin ที่ต้องถูกปฏิเสธ
-#   X_USER_ID      ค่า header X-User-Id ที่ส่งตอนทดสอบ route /claims (ค่าเริ่มต้น: test-ta-01)
 set -u
 
 : "${API_URL:?ต้องตั้งค่า API_URL เช่น API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com}"
@@ -24,7 +23,6 @@ API_URL="${API_URL%/}"
 ORIGIN="${ORIGIN:-https://d2ye2fegyyx6ls.cloudfront.net}"
 LOCAL_ORIGIN="${LOCAL_ORIGIN:-http://localhost:3000}"
 BAD_ORIGIN="${BAD_ORIGIN:-http://evil.example.com}"
-X_USER_ID="${X_USER_ID:-test-ta-01}"
 RUN_ROUTES="${RUN_ROUTES:-0}"
 TOKEN="${TOKEN:-}"
 
@@ -45,7 +43,7 @@ header_of() { printf '%s\n' "$HDRS" | grep -i "^$1:" | head -1 | cut -d: -f2- | 
 echo "=== CORS preflight: $API_URL ==="
 
 # 1) origin ที่อนุญาต (CloudFront)
-preflight /rates "$ORIGIN" POST "content-type,authorization,x-user-id"
+preflight /rates "$ORIGIN" POST "content-type,authorization"
 [ "$(status_of)" = "204" ] \
   && pass "preflight จาก CloudFront ได้ 204" \
   || fail "preflight จาก CloudFront ควรได้ 204 (ได้ '$(status_of)')"
@@ -57,7 +55,6 @@ preflight /rates "$ORIGIN" POST "content-type,authorization,x-user-id"
 AH=$(header_of access-control-allow-headers | tr 'A-Z' 'a-z')
 case "$AH" in *authorization*) pass "allow-headers มี Authorization" ;; *) fail "allow-headers ไม่มี Authorization (ได้ '$AH')" ;; esac
 case "$AH" in *content-type*)  pass "allow-headers มี Content-Type" ;;  *) fail "allow-headers ไม่มี Content-Type (ได้ '$AH')" ;; esac
-case "$AH" in *x-user-id*)      pass "allow-headers มี X-User-Id" ;;     *) fail "allow-headers ไม่มี X-User-Id (ได้ '$AH')" ;; esac
 
 AM=$(header_of access-control-allow-methods | tr 'a-z' 'A-Z')
 for m in GET POST PUT; do
@@ -71,9 +68,9 @@ MAXAGE=$(header_of access-control-max-age)
 
 # 2) preflight ของ route ที่ใช้ method ต่างกัน
 for spec in "/claims:POST" "/claims/c001:PUT" "/claims/c001/submit:POST" "/terms:GET" \
-            "/schedule/1:DELETE" "/current-period:GET" "/admin/claims:GET"; do
+            "/schedule/1:DELETE" "/schedule:GET" "/admin/claims:GET"; do
   p="${spec%%:*}"; m="${spec##*:}"
-  preflight "$p" "$ORIGIN" "$m" "content-type,x-user-id"
+  preflight "$p" "$ORIGIN" "$m" "content-type,authorization"
   if [ "$(status_of)" = "204" ] && [ "$(header_of access-control-allow-origin)" = "$ORIGIN" ]; then
     pass "preflight $m $p"
   else
@@ -97,15 +94,13 @@ fi
 
 # ---------- JWT Authorizer (V3) ----------
 echo "=== JWT Authorizer ==="
-# Lambda ของ V2 ตอบ 401 เองเมื่อไม่มี X-User-Id จึงส่ง X-User-Id ทุกครั้ง (จนกว่า #81 จะเลิกใช้)
-# แล้วตรวจ body ว่าเป็น {"message":"Unauthorized"} ของ API Gateway ไม่ใช่ 401 ของ Lambda
-UID_H="X-User-Id: $X_USER_ID"
+# ตรวจ body ว่าเป็น {"message":"Unauthorized"} ของ API Gateway ไม่ใช่ 401 ของ Lambda
 # code_of <curl args...> -> HTTP status
-code_of() { curl -s --max-time 20 -o /dev/null -w "%{http_code}" -H "$UID_H" "$@"; }
+code_of() { curl -s --max-time 20 -o /dev/null -w "%{http_code}" "$@"; }
 # authz_401 <ชื่อ> <curl args...> -> ผ่านเมื่อได้ 401 จาก Authorizer
 authz_401() {
   local name="$1" out code body; shift
-  out=$(curl -s --max-time 20 -w $'\n%{http_code}' -H "$UID_H" "$@")
+  out=$(curl -s --max-time 20 -w $'\n%{http_code}' "$@")
   code="${out##*$'\n'}"; body="${out%$'\n'*}"
   if [ "$code" = "401" ] && printf '%s' "$body" | grep -q '"message" *: *"Unauthorized"'; then
     pass "$name ได้ 401 จาก Authorizer"
@@ -114,7 +109,7 @@ authz_401() {
   fi
 }
 
-for path in /rates /claims /current-period /admin/claims; do
+for path in /rates /claims /schedule /admin/claims; do
   authz_401 "ไม่มี token: GET $path" "$API_URL$path"
 done
 authz_401 "token ปลอม: GET /rates" -H "Authorization: Bearer not.a.real.token" "$API_URL/rates"
@@ -149,16 +144,15 @@ if [ "$RUN_ROUTES" = "1" ]; then
     if [ "$code" = "$expected" ]; then pass "$name (got $code)"; else fail "$name (expected $expected, got $code)"; fi
   }
 
-  # Lambda ของ V2 ทุกตัว (รวม /rates, /terms) ตอบ 401 เมื่อไม่มี X-User-Id
-  check "GET /rates"                 200 -H "$UID_H" "$API_URL/rates"
-  check "GET /terms"                 200 -H "$UID_H" "$API_URL/terms"
-  check "GET /claims"                200 -H "$UID_H" "$API_URL/claims?userId=u001&term=1-2569"
-  check "GET /claims bad status"     400 -H "$UID_H" "$API_URL/claims?status=invalid"
-  check "POST /claims"               201 -H "$UID_H" -X POST "$API_URL/claims" -H "$JSON" -d "$BODY"
-  check "POST /claims empty body"    400 -H "$UID_H" -X POST "$API_URL/claims" -H "$JSON" -d '{}'
-  check "GET /claims/{id} not found" 404 -H "$UID_H" "$API_URL/claims/not-exist"
-  check "PUT /claims/{id} not found" 404 -H "$UID_H" -X PUT "$API_URL/claims/not-exist" -H "$JSON" -d "$BODY"
-  check "submit not found"           404 -H "$UID_H" -X POST "$API_URL/claims/not-exist/submit"
+  check "GET /rates"                 200 "$API_URL/rates"
+  check "GET /terms"                 200 "$API_URL/terms"
+  check "GET /claims"                200 "$API_URL/claims?userId=u001&term=1-2569"
+  check "GET /claims bad status"     400 "$API_URL/claims?status=invalid"
+  check "POST /claims"               201 -X POST "$API_URL/claims" -H "$JSON" -d "$BODY"
+  check "POST /claims empty body"    400 -X POST "$API_URL/claims" -H "$JSON" -d '{}'
+  check "GET /claims/{id} not found" 404 "$API_URL/claims/not-exist"
+  check "PUT /claims/{id} not found" 404 -X PUT "$API_URL/claims/not-exist" -H "$JSON" -d "$BODY"
+  check "submit not found"           404 -X POST "$API_URL/claims/not-exist/submit"
 else
   echo "(ข้ามการทดสอบ route: ตั้ง RUN_ROUTES=1 เมื่อผูก Lambda แล้ว)"
 fi

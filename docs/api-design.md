@@ -8,47 +8,43 @@
 
 ### 1.1 Route ของ V2
 
+ตารางนี้เป็นสัญญาปัจจุบัน (V3) ของ Route ที่มีตั้งแต่ V2 Lambda ระบุผู้ใช้จาก Token แล้ว ไม่รับ `userId` หรือ `role` ใน body
+
 | Method | Route | หน้าที่ | ชื่อ Lambda (Prefix: `cookierun-`) | Status ที่คืน |
 |---|---|---|---|---|
-| GET | `/claims?userId=&term=&status=` | ดึงรายการคำขอ (Dashboard) | `cookierun-getClaims` | 200, 400, 500 |
-| POST | `/claims` | สร้างคำขอใหม่/บันทึกร่าง | `cookierun-createClaim` | 201, 400, 500 |
-| GET | `/claims/{id}` | ดูรายละเอียดคำขอ (รวมสถานะ) | `cookierun-getClaimById` | 200, 404, 500 |
-| PUT | `/claims/{id}` | แก้ไขคำขอที่เป็นร่าง | `cookierun-updateClaim` | 200, 400, 404, 409, 500 |
-| POST | `/claims/{id}/submit` | ยื่นคำขอ (draft → submitted) | `cookierun-submitClaim` | 200, 400, 404, 409, 500 |
-| GET | `/terms` | ภาคการศึกษาและรอบการเบิก | `cookierun-getTerms` | 200, 500 |
-| GET | `/rates` | อัตราค่าตอบแทน | `cookierun-getRates` | 200, 500 |
-| GET | `/uploads/presigned-url` | ขอ URL สำหรับอัปโหลดไฟล์หลักฐาน | `cookierun-getPresignedUrl` | 200, 500 |
+| GET | `/claims?term=&status=&statusId=&userId=` | รายการคำขอของตนเอง (`userId` ใช้ได้เฉพาะ admin) | `cookierun-getClaims` | 200, 400, 403 |
+| POST | `/claims` | สร้างคำขอ `draft` จาก `offeringId`, `month`, `items[]` (1 วิชา / 1 เดือน) | `cookierun-createClaim` | 201, 400, 403, 404, 409 |
+| GET | `/claims/{id}` | รายละเอียดคำขอ (เจ้าของหรือ admin) | `cookierun-getClaimById` | 200, 403, 404 |
+| PUT | `/claims/{id}` | แทนที่ `items[]` ของคำขอ `draft` / `returned` | `cookierun-updateClaim` | 200, 400, 403, 404, 409 |
+| POST | `/claims/{id}/submit` | ยื่นคำขอพร้อม `printMethod` (draft / returned → submitted) | `cookierun-submitClaim` | 200, 400, 403, 404, 409 |
+| GET | `/terms` | ภาคการศึกษาและรอบการเบิก | `cookierun-getTerms` | 200 |
+| GET | `/rates` | อัตราค่าตอบแทนและเพดานชั่วโมง | `cookierun-getRates` | 200 |
+| GET | `/uploads/presigned-url?filename=&contentType=` | Presigned URL (PUT) อายุ 300 วินาที | `cookierun-getPresignedUrl` | 200, 400 |
 
-### 1.2 Route ของ V3 (ร่าง)
+### 1.2 Route ของ V3
 
-ทุก Route ด้านล่างอาจคืน `401` (ไม่มี token) และ `500` เพิ่มจากที่ระบุ ส่วน `403` คือเข้าสู่ระบบแล้วแต่ไม่มีสิทธิ์
+ทุก Route อาจคืน `401` (ไม่มี token), `403` (ไม่พบผู้ใช้ที่ผูกกับ `cognitoSub` หรือไม่มีสิทธิ์) และ `500` เพิ่มจากที่ระบุ
 
 | Method | Route | หน้าที่ | Lambda | Status ที่คืน |
-|---|---|---|---|---|---|
-| GET | `/schedule?month=YYYY-MM` | คาบของเดือน + สรุปคาบ/ชั่วโมงต่อวิชา | `cookierun-getSchedule` | 200, 400, 403 |
-| POST | `/schedule` | เพิ่มคาบ ทั้งคาบปกติ (`repeatWeekly`) และสอนชดเชย แยกด้วย `kind` | `cookierun-postSchedule` | 201, 400, 409 |
-| PUT | `/schedule/{id}` | แก้คาบทุกประเภท รวมถึงทำเครื่องหมายงดสอน (`kind: cancelled`) | `cookierun-putSchedule` | 200, 400, 404, 409 |
-| DELETE | `/schedule/{id}` | ลบคาบทุกประเภท | `cookierun-deleteSchedule` | 200, 404, 409 |
-| GET | `/work-days?month=YYYY-MM` | วันทำงานของนักศึกษาช่วยงาน | `cookierun-workDays` | 200, 400 |
-| POST | `/work-days` | เพิ่มวันทำงาน | `cookierun-workDays` | 201, 400, 409 |
-| PUT | `/work-days/{id}` | แก้วันทำงาน | `cookierun-workDays` | 200, 400, 404, 409 |
-| DELETE | `/work-days/{id}` | ลบวันทำงาน | `cookierun-workDays` | 200, 404, 409 |
-| POST | `/work-days/clock` | ลงเวลาเข้า-ออกของวันนี้ | `cookierun-workDays` | 200, 400, 409 |
-| GET | `/current-period` | ภาค รอบการเบิก วันสิ้นสุด วันที่เหลือ | `cookierun-getCurrentPeriod` | 200 |
-| POST | `/claims/autofill` | สร้างร่างคำขอจากปฏิทิน (1 วิชา/เดือน) | `cookierun-autofillClaim` | 200 (ไม่มีคาบ), 201, 400, 403, 409 |
-| PUT | `/claims/{id}/print-method` | เปลี่ยนช่องทางยื่น | `cookierun-claimWorkflow` | 200, 400, 404, 409 |
-| GET | `/claims/{id}/actions` | ประวัติการดำเนินการของคำขอ | `cookierun-claimWorkflow` | 200, 404 |
-| GET | `/claims/{id}/pdf?type=claim\|makeup\|blank` | สร้าง PDF (คำขอ / ขอสอนชดเชย / แบบฟอร์มเปล่า) คืน Presigned URL | `cookierun-generatePdf` | 200, 403, 404, 409 |
-| GET | `/admin/claims?role=&status=&month=&offeringId=&printMethod=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ | `cookierun-admin` | 200, 403 |
-| GET | `/admin/claims/{id}` | รายละเอียดสำหรับตรวจ | `cookierun-admin` | 200, 403, 404 |
-| POST | `/admin/claims/{id}/review` | approve / reject / return | `cookierun-admin` | 200, 400, 403, 404, 409 |
-| POST | `/admin/claims/{id}/printed` | บันทึกว่าเจ้าหน้าที่พิมพ์แล้ว | `cookierun-admin` | 200, 403, 404, 409 |
-| POST | `/admin/claims/{id}/documents-received` | รับเอกสารที่เซ็นแล้ว | `cookierun-admin` | 200, 403, 404, 409 |
-| POST | `/admin/claims/send-to-finance` | ส่งการเงินเป็นชุด | `cookierun-admin` | 200, 400, 403, 409 |
+|---|---|---|---|---|
+| GET | `/schedule?month=YYYY-MM` | คาบของเดือน + รายวิชาของภาคนั้น | `cookierun-getSchedule` | 200, 400 |
+| POST | `/schedule` | เพิ่มคาบ คาบเดียวหรือซ้ำทุกสัปดาห์ถึง `repeatUntil` ประเภทคาบดูจาก `description` | `cookierun-postSchedule` | 200, 400 |
+| PUT | `/schedule/{id}` | แก้คาบของตนเอง ทำเครื่องหมายงดสอนด้วย `description: cancelled` | `cookierun-putSchedule` | 200, 400, 404 |
+| DELETE | `/schedule/{id}` | ลบคาบของตนเอง | `cookierun-deleteSchedule` | 200, 400, 404 |
+| POST | `/claims/autofill` | ร่างรายการงานจากปฏิทิน (ยังไม่สร้างคำขอ หน้าเว็บสร้างต่อด้วย `POST /claims`) | `cookierun-autofillClaim` | 200, 400, 404 |
+| PUT | `/claims/{id}/print-method` | เปลี่ยนช่องทางยื่น | `cookierun-claimWorkflow` | 200, 400, 404 |
+| GET | `/claims/{id}/actions` | ประวัติการดำเนินการของคำขอ (`claims_histories`) | `cookierun-claimWorkflow` | 200, 404 |
+| GET | `/claims/{id}/pdf?type=claim\|blank` | สร้าง PDF คืน Presigned URL (ก่อนอนุมัติได้ฉบับตัวอย่าง) | `cookierun-generatePdf` | 200, 400, 404, 409 |
+| GET | `/admin/claims?role=&status=&month=&offeringId=&printMethod=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ | `cookierun-admin` | 200, 400 |
+| GET | `/admin/claims/{id}` | รายละเอียดสำหรับตรวจ พร้อมประวัติ | `cookierun-admin` | 200, 404 |
+| POST | `/admin/claims/{id}/review` | approve / reject / return | `cookierun-admin` | 200, 400, 404, 409 |
+| POST | `/admin/claims/{id}/printed` | บันทึกว่าเจ้าหน้าที่พิมพ์แล้ว | `cookierun-admin` | 200, 404, 409 |
+| POST | `/admin/claims/{id}/documents-received` | รับเอกสารที่เซ็นแล้ว | `cookierun-admin` | 200, 404, 409 |
+| POST | `/admin/claims/send-to-finance` | ส่งการเงินเป็นชุด | `cookierun-admin` | 200, 400, 404, 409 |
 
-- Lambda ของ V3 ส่วนใหญ่รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย `event.routeKey` (เช่น `"POST /admin/claims/{id}/review"`) ยกเว้นปฏิทินคาบสอน (`/schedule`) ที่แยก Lambda ต่อ method ตามที่คนที่ 2 เลือก
+- Lambda ของ V3 ส่วนใหญ่รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย path และ method ยกเว้นปฏิทินคาบสอน (`/schedule`) ที่แยก Lambda ต่อ method
 - `ClaimStatus` ของ V3: `draft`, `submitted`, `returned`, `approved`, `rejected`, `documents_received`, `sent_to_finance`
-- Route ที่ยังไม่มี Lambda จะตอบ `500` เมื่อส่ง token ที่ถูกต้อง และตอบ `401` เมื่อไม่มี token (Authorizer ทำงานก่อน Lambda)
+- ไม่มี Route `/work-days` และ `/current-period`: วันทำงานของนักศึกษาช่วยงานใช้ `/schedule` ร่วมกับอาจารย์ / TA และหน้าเว็บคำนวณรอบการเบิกปัจจุบันจากวันที่เอง
 
 *(ตัวอย่าง Request/Response ของทุก Route สามารถดูได้ในไฟล์ `openapi.yaml` ฟิลด์ `example`)*
 
@@ -113,7 +109,7 @@
 - **Decision:** อนุญาตเฉพาะ Origin `https://d2ye2fegyyx6ls.cloudfront.net` (Frontend ผ่าน CloudFront) และ `http://localhost:3000`, `:5500`, `:8000` สำหรับพัฒนา ไม่ใช้ `*` และไม่ใช้ S3 Website Endpoint เดิม เพราะ bucket ของ Frontend เป็น private และผู้ใช้เข้าผ่าน CloudFront เท่านั้น
 - **Headers:** `Content-Type` และ `Authorization` (เพิ่มไว้ล่วงหน้าสำหรับ V3 ที่ Login แล้วส่ง token ผ่าน header นี้)
 - **Trade-off:** การเพิ่ม `Authorization` ตั้งแต่ V2 ยังไม่มีผลใช้งานจริงและไม่เพิ่มความเสี่ยง แต่ทำให้ไม่ต้องแก้ CORS และ import ใหม่ตอน V3 ส่วน localhost ควรเอาออกก่อนส่ง V7 เพราะไม่ควรเปิดค้างบนระบบจริง
-- **V3:** เพิ่ม method `DELETE` (Route ปฏิทิน) ส่วน `X-User-Id` ยังคงไว้ชั่วคราวจนกว่า Lambda เลิกอ่าน และหน้าเว็บเลิกส่ง แล้วจึงลบออก
+- **V3:** เพิ่ม method `DELETE` (Route ปฏิทิน) และลบ `X-User-Id` ออกจาก Headers เพราะ Lambda อ่านผู้ใช้จาก Token แล้ว
 - **CORS กับ 401:** API Gateway ใส่ header CORS ให้ทุก response รวมถึง `401` จาก Authorizer หน้าเว็บจึงอ่าน status `401` ได้ (ไม่กลายเป็น CORS error) และพากลับหน้า Login ได้ ส่วน preflight `OPTIONS` ไม่ผ่าน Authorizer เพราะ API Gateway ตอบเอง (ห้ามสร้าง route `OPTIONS` หรือ `$default` เอง ไม่เช่นนั้น preflight จะโดน 401)
 
 ### 2.5 JWT Authorizer (Cognito) บน HTTP API เดิม (V3)
@@ -135,9 +131,9 @@
 
 ### 2.6 Lambda ของ V3 รวม Route ตามฟีเจอร์
 
-- **Requirement:** V3 เพิ่ม 20 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
-- **Decision:** Route ใหม่ใช้ Lambda 10 ฟังก์ชัน ส่วนใหญ่รวมตามฟีเจอร์ (`workDays`, `getCurrentPeriod`, `autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย `event.routeKey` ส่วนปฏิทินคาบสอนแยกต่อ method (`getSchedule`, `postSchedule`, `putSchedule`, `deleteSchedule`) ตามที่เจ้าของ Lambda เลือก Route ของ V2 คง Lambda เดิม
-- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (10 แทน 20) สิ่งที่แลกคือสิทธิ์ IAM ของแต่ละ Lambda กว้างขึ้นเล็กน้อย (เช่น `cookierun-admin` ทั้งอ่านและเปลี่ยนสถานะ) และต้องเขียน routing ในโค้ด
+- **Requirement:** V3 เพิ่ม 14 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
+- **Decision:** Route ใหม่ใช้ Lambda 8 ฟังก์ชัน ส่วนใหญ่รวมตามฟีเจอร์ (`autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย path และ method ส่วนปฏิทินคาบสอนแยกต่อ method (`getSchedule`, `postSchedule`, `putSchedule`, `deleteSchedule`) ตามที่เจ้าของ Lambda เลือก Route ของ V2 คง Lambda เดิม
+- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (8 แทน 14) สิ่งที่แลกคือต้องเขียน routing ในโค้ด ส่วนสิทธิ์ IAM ปัจจุบันทุก Lambda ใช้ Role `cookierun-lambda-role` ร่วมกัน
 
 ## 3. Stage และ Access Log (V2)
 
