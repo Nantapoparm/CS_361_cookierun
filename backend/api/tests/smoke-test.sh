@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ทดสอบ CORS preflight ของ API Gateway และ ทดสอบทุก route
+# ทดสอบ CORS preflight ของ API Gateway, JWT Authorizer และ route ของ V3 (ไม่สร้างข้อมูลจริง)
 #
 # ใช้ (CloudShell หรือเครื่องที่มี curl):
 #   API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com ./smoke-test.sh
@@ -133,26 +133,61 @@ fi
 # ---------- ทดสอบ route (ต้องผูก Lambda แล้ว) ----------
 if [ "$RUN_ROUTES" = "1" ]; then
   echo "=== Route tests (RUN_ROUTES=1) ==="
+  # ทดสอบเฉพาะกรณีที่ไม่เขียนข้อมูล (อ่านอย่างเดียว / 400 / 404) จึงรันซ้ำได้และไม่สร้างคำขอจริง
+  # ผู้ใช้ของ TOKEN ต้องผูก cognitoSub ใน user_information แล้ว ไม่อย่างนั้นทุก route ได้ 403
+  [ -n "$TOKEN" ] || { echo "RUN_ROUTES=1 ต้องตั้ง TOKEN ด้วย (ทุก route ต้องเข้าสู่ระบบ)"; exit 1; }
   JSON='Content-Type: application/json'
-  BODY='{"userId":"u001","role":"instructor","term":"1-2569","billingCycle":1,"items":[{"date":"2026-09-15","courseCode":"CS361","hours":3}]}'
+  MONTH=$(date +%Y-%m)
+
+  # กลุ่ม admin หรือไม่ (จาก cognito:groups ใน token) ใช้กำหนดผลที่คาดของ route ที่จำกัดสิทธิ์
+  IS_ADMIN=$(printf '%s' "$TOKEN" | python3 -c '
+import base64, json, sys
+p = sys.stdin.read().split(".")[1]
+g = json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4))).get("cognito:groups") or []
+g = g if isinstance(g, list) else str(g).strip("[]").split()
+print(1 if "admin" in g else 0)' 2>/dev/null || echo 0)
+  if [ "$IS_ADMIN" = "1" ]; then
+    echo "(token เป็นกลุ่ม admin)"; OTHER_USER=200; ADMIN_LIST=200; ADMIN_ONE=404
+  else
+    echo "(token ไม่ใช่กลุ่ม admin)"; OTHER_USER=403; ADMIN_LIST=403; ADMIN_ONE=403
+  fi
 
   # check <ชื่อ> <status ที่คาดหวัง> <curl args...>
-  [ -n "$TOKEN" ] || { echo "RUN_ROUTES=1 ต้องตั้ง TOKEN ด้วย (ทุก route ต้องเข้าสู่ระบบ)"; exit 1; }
   check() {
     local name="$1" expected="$2" code; shift 2
-    code=$(curl -s --max-time 20 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$@")
+    code=$(curl -s --max-time 30 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$@")
     if [ "$code" = "$expected" ]; then pass "$name (got $code)"; else fail "$name (expected $expected, got $code)"; fi
   }
 
-  check "GET /rates"                 200 "$API_URL/rates"
-  check "GET /terms"                 200 "$API_URL/terms"
-  check "GET /claims"                200 "$API_URL/claims?userId=u001&term=1-2569"
-  check "GET /claims bad status"     400 "$API_URL/claims?status=invalid"
-  check "POST /claims"               201 -X POST "$API_URL/claims" -H "$JSON" -d "$BODY"
-  check "POST /claims empty body"    400 -X POST "$API_URL/claims" -H "$JSON" -d '{}'
-  check "GET /claims/{id} not found" 404 "$API_URL/claims/not-exist"
-  check "PUT /claims/{id} not found" 404 -X PUT "$API_URL/claims/not-exist" -H "$JSON" -d "$BODY"
-  check "submit not found"           404 -X POST "$API_URL/claims/not-exist/submit"
+  # ข้อมูลอ้างอิง
+  check "GET /rates"                           200 "$API_URL/rates"
+  check "GET /terms"                           200 "$API_URL/terms"
+  check "GET /uploads/presigned-url"           200 "$API_URL/uploads/presigned-url?filename=smoke-test.txt&contentType=text/plain"
+  check "presigned-url ไม่มี filename"            400 "$API_URL/uploads/presigned-url"
+
+  # คำขอ
+  check "GET /claims"                          200 "$API_URL/claims"
+  check "GET /claims status ผิด"                 400 "$API_URL/claims?status=invalid"
+  check "GET /claims ของผู้ใช้อื่น"                 "$OTHER_USER" "$API_URL/claims?userId=smoke-other-user"
+  check "POST /claims body ว่าง"                 400 -X POST "$API_URL/claims" -H "$JSON" -d '{}'
+  check "POST /claims month ผิด"                 400 -X POST "$API_URL/claims" -H "$JSON"     -d '{"offeringId":1,"month":"2026-13","items":[{"workDate":"2026-10-06","startTime":"09:30","endTime":"12:30"}]}'
+  check "GET /claims/{id} ไม่พบ"                 404 "$API_URL/claims/not-exist"
+  check "PUT /claims/{id} ไม่พบ"                 404 -X PUT "$API_URL/claims/not-exist" -H "$JSON" -d '{}'
+  check "submit ไม่พบ"                          404 -X POST "$API_URL/claims/not-exist/submit" -H "$JSON" -d '{"printMethod":"sign_with_staff"}'
+  check "print-method ไม่พบ"                    404 -X PUT "$API_URL/claims/not-exist/print-method" -H "$JSON" -d '{"printMethod":"self_print"}'
+  check "GET /claims/{id}/actions ไม่พบ"         404 "$API_URL/claims/not-exist/actions"
+  check "GET /claims/{id}/pdf ไม่พบ"             404 "$API_URL/claims/not-exist/pdf"
+  check "POST /claims/autofill body ว่าง"        400 -X POST "$API_URL/claims/autofill" -H "$JSON" -d '{}'
+
+  # ปฏิทินคาบสอน
+  check "GET /schedule?month=$MONTH"           200 "$API_URL/schedule?month=$MONTH"
+  check "GET /schedule ไม่มี month"              400 "$API_URL/schedule"
+  check "POST /schedule body ว่าง"               400 -X POST "$API_URL/schedule" -H "$JSON" -d '{}'
+  check "DELETE /schedule/{id} ไม่พบ"            404 -X DELETE "$API_URL/schedule/0"
+
+  # เจ้าหน้าที่
+  check "GET /admin/claims"                    "$ADMIN_LIST" "$API_URL/admin/claims"
+  check "GET /admin/claims/{id}"               "$ADMIN_ONE" "$API_URL/admin/claims/not-exist"
 else
   echo "(ข้ามการทดสอบ route: ตั้ง RUN_ROUTES=1 เมื่อผูก Lambda แล้ว)"
 fi

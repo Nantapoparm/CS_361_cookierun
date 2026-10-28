@@ -291,11 +291,11 @@ TOKEN=$(bash backend/api/scripts/get-token.sh)
 # มี Token: เพิ่มกรณีที่ต้องได้ 200 (26 รายการ)
 TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
 
-# มี Token และทดสอบ Route (35 รายการ ดูข้อจำกัดด้านล่าง)
+# มี Token และทดสอบ Route ของ V3 (48 รายการ)
 RUN_ROUTES=1 TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
 ```
 
-สคริปต์คืน exit code 0 เมื่อผ่านทุกรายการ การทดสอบ `POST /claims` จะสร้างข้อมูลจริงในระบบ
+สคริปต์คืน exit code 0 เมื่อผ่านทุกรายการ การทดสอบ Route ไม่สร้างข้อมูลในระบบ (ทดสอบเฉพาะการอ่าน และกรณีที่ต้องได้ 400 / 404) จึงรันซ้ำได้ ผลที่คาดของ `GET /claims?userId=` และ `/admin/*` ขึ้นกับว่า Token เป็นกลุ่ม `admin` หรือไม่ ผู้ใช้ของ Token ต้องผูก `cognitoSub` ใน RDS แล้ว
 
 ตรวจด้วยมือ:
 
@@ -308,8 +308,7 @@ curl -i -H "Authorization: Bearer $TOKEN" "$API_URL/rates"   # มี Token → 
 - JWT Authorizer ของ HTTP API ตรวจ `cognito:groups` ไม่ได้ สิทธิ์ตามบทบาทจึงต้องตรวจซ้ำในทุก Lambda หาก Lambda ตัวใดลืมตรวจ จะเปิดสิทธิ์เกินได้
 - หน้าเว็บเก็บ Token ใน `localStorage` (ใช้ร่วมกันหลายแท็บ) จึงเสี่ยงหากหน้าเว็บมีช่องโหว่ XSS
 - `get-token.sh` ต้องเปิด `ALLOW_USER_PASSWORD_AUTH` ใน App Client
-- การทดสอบ Route (`RUN_ROUTES=1`) ยังเป็นของ V2 ผ่าน 33/35 รายการ `GET /claims` ได้ `403` เพราะสคริปต์ส่ง `userId=u001` ตายตัว (Lambda ไม่ให้ดูคำขอของผู้อื่น) และ `POST /claims` ได้ `400` เพราะ body ยังเป็นรูปแบบ V2 (V3 ใช้ `offeringId`, `month`, `items[].workDate/startTime/endTime`) ทั้งสองเป็นปัญหาของสคริปต์ ไม่ใช่ API
-- Smoke test ยังไม่ครอบคลุมกรณีสำเร็จของ Route V3
+- Smoke test ไม่ทดสอบ Route ที่เขียนข้อมูลในกรณีสำเร็จ (สร้าง / แก้ / ยื่นคำขอ, เพิ่ม / ลบคาบ, ตรวจ / อนุมัติ, สร้าง PDF) เพื่อไม่ให้สร้างข้อมูลจริง ส่วนนี้ยังต้องทดสอบผ่านหน้าเว็บ
 - ยังไม่ได้ยืนยันว่าการอัปโหลดและดาวน์โหลดผ่าน Presigned URL ใช้งานได้หลังเปลี่ยน `cookierun-uploads` เป็น SSE-KMS (Acceptance Criteria ที่ยังเปิดอยู่ใน #80)
 - การยื่นคำขอ (`submit`) ยังไม่ถูกบันทึกใน `claims_histories` เพราะ `cookierun-submitClaim` ตั้ง `CLAIM_ACTIONS_ENABLED=0`
 - Lambda ทุกตัวใช้ IAM Role เดียวกัน (`cookierun-lambda-role`) สิทธิ์ของแต่ละฟังก์ชันจึงกว้างกว่าที่จำเป็น ยังไม่เป็นไปตามหลัก Least Privilege
