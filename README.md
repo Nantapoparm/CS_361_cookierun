@@ -174,7 +174,7 @@ RUN_ROUTES=1 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash
 - ปฏิทินคาบสอน (ตารางสอนประจำ งดสอน สอนชดเชย) (#72)
 - สร้างร่างคำขออัตโนมัติจากปฏิทิน พร้อมตรวจเพดานชั่วโมงและยอดเงิน (#82)
 - สร้างเอกสาร PDF ภาษาไทยของคำขอ เก็บใน S3 และดาวน์โหลดด้วย Presigned URL อายุสั้น (#83)
-- กระบวนการตรวจและอนุมัติของเจ้าหน้าที่ (approve / reject / return, พิมพ์เอกสาร, รับเอกสาร, ส่งการเงินเป็นชุด) และบันทึกประวัติการดำเนินการ (Audit Log) ในตาราง `claim_actions` (#84)
+- กระบวนการตรวจและอนุมัติของเจ้าหน้าที่ (approve / reject / return, พิมพ์เอกสาร, รับเอกสาร, ส่งการเงินเป็นชุด) และบันทึกประวัติการดำเนินการ (Audit Log) ในตาราง `claims_histories` (#84)
 - เข้ารหัสข้อมูลขณะจัดเก็บด้วย KMS และบันทึกการใช้งานด้วย CloudTrail (#80)
 
 ### Out of scope (V4+)
@@ -203,7 +203,7 @@ RUN_ROUTES=1 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash
    │      ├─ IAM Role cookierun-lambda-role (ใช้ร่วมกันทุกฟังก์ชัน)
    │      │
    │      ├─► Amazon RDS (MySQL, เข้ารหัสด้วย aws/rds)          คำขอ อัตรา ภาคการศึกษา ปฏิทิน
-   │      │      └─ claim_actions                              Audit Log การตรวจ อนุมัติ รับเอกสาร ส่งการเงิน
+   │      │      └─ claims_histories                           Audit Log การตรวจ อนุมัติ รับเอกสาร ส่งการเงิน
    │      └─► Amazon S3 (cookierun-uploads, SSE-KMS)            เอกสารหลักฐาน + PDF คำขอ
    │             ▲  เข้ารหัส Object
    │          AWS KMS (Customer Managed Key)
@@ -222,7 +222,7 @@ AWS CloudTrail (cookierun-management-trail)                    Management Events
 | ตรวจสิทธิ์ | Lambda Layer (`db.py`, `validation.py`) + `pymysql` | ใช้โค้ดอ่านผู้ใช้และตรวจสิทธิ์ชุดเดียวกันทุก Lambda จับคู่ `sub` กับ `user_information.cognitoSub` |
 | Logic | Lambda ของ V3 รวม Route ตามฟีเจอร์ (8 ฟังก์ชันสำหรับ 14 Route) | จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง แลกกับต้องแยกการทำงานด้วย `event.routeKey` ในโค้ด ดู [`docs/api-design.md`](docs/api-design.md#26-lambda-ของ-v3-รวม-route-ตามฟีเจอร์) |
 | เอกสาร PDF | S3 `cookierun-uploads` + Presigned URL | ไฟล์ไม่ผ่าน Lambda ขาออก ลิงก์หมดอายุใน 300 วินาที และ Bucket ไม่เปิดสาธารณะ |
-| Audit Log | ตาราง `claim_actions` ใน RDS | บันทึกใน Transaction เดียวกับการเปลี่ยนสถานะคำขอ ตรวจย้อนหลังได้ว่าใครทำอะไรเมื่อไร ปัจจุบันบันทึกผลตรวจ (approve / reject / return), การพิมพ์เอกสาร, การรับเอกสาร, การส่งการเงิน (`cookierun-admin`) และการเปลี่ยนช่องทางยื่น (`cookierun-claimWorkflow`) |
+| Audit Log | ตาราง `claims_histories` ใน RDS | บันทึกใน Transaction เดียวกับการเปลี่ยนสถานะคำขอ ตรวจย้อนหลังได้ว่าใครทำอะไรเมื่อไร ปัจจุบันบันทึกผลตรวจ (approve / reject / return), การพิมพ์เอกสาร, การรับเอกสาร, การส่งการเงิน (`cookierun-admin`) และการเปลี่ยนช่องทางยื่น (`cookierun-claimWorkflow`) |
 | เข้ารหัส | AWS KMS: Customer Managed Key กับ `cookierun-uploads`, `aws/rds` กับ RDS | S3 ที่เก็บหลักฐานและ PDF ต้องมีทั้งสิทธิ์ S3 และสิทธิ์ใช้กุญแจจึงเปิดไฟล์ได้ ส่วน Bucket หน้าเว็บคง SSE-S3 เพราะไม่มีข้อมูลส่วนบุคคล ดู [`docs/security-v3.md`](docs/security-v3.md) |
 | ตรวจสอบย้อนหลัง | AWS CloudTrail (Trail `cookierun-management-trail`, Multi-region) | บันทึก Management Events รวมถึงทุกครั้งที่มีการใช้ KMS Key (`Decrypt`, `GenerateDataKey`) ตรวจย้อนหลังได้ว่าใครเปิดไฟล์เมื่อไร |
 
@@ -261,7 +261,7 @@ Base URL: `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com`
 | DELETE | `/schedule/{id}` | `cookierun-deleteSchedule` | #72 | ลบคาบ |
 | POST | `/claims/autofill` | `cookierun-autofillClaim` | #82 | สร้างร่างคำขอจากปฏิทิน (1 รายวิชา ต่อ 1 เดือน) |
 | PUT | `/claims/{id}/print-method` | `cookierun-claimWorkflow` | #84 | เปลี่ยนช่องทางยื่นเอกสาร |
-| GET | `/claims/{id}/actions` | `cookierun-claimWorkflow` | #84 | ประวัติการดำเนินการของคำขอ (`claim_actions`) |
+| GET | `/claims/{id}/actions` | `cookierun-claimWorkflow` | #84 | ประวัติการดำเนินการของคำขอ (`claims_histories`) |
 | GET | `/claims/{id}/pdf` | `cookierun-generatePdf` | #83 | สร้าง PDF และคืน Presigned URL อายุสั้น |
 | GET | `/admin/claims` | `cookierun-admin` | #84 | รายการคำขอทั้งหมด กรอง/ค้นหาได้ พร้อมจำนวนตามสถานะ |
 | GET | `/admin/claims/{id}` | `cookierun-admin` | #84 | รายละเอียดคำขอสำหรับตรวจ |
@@ -282,16 +282,16 @@ Route `/admin/*` ใช้ได้เฉพาะกลุ่ม `admin` สถ
 ```bash
 export API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com
 
-# ไม่มี Token: ทดสอบ CORS และ Authorizer ต้องได้ 401 (24 รายการ)
+# ไม่มี Token: ทดสอบ CORS และ Authorizer ต้องได้ 401 (23 รายการ)
 bash backend/api/tests/smoke-test.sh
 
 # ขอ Token จาก Cognito (เลือกบัญชีด้วย COGNITO_USER=... ได้)
 TOKEN=$(bash backend/api/scripts/get-token.sh)
 
-# มี Token: เพิ่มกรณีที่ต้องได้ 200 (27 รายการ)
+# มี Token: เพิ่มกรณีที่ต้องได้ 200 (26 รายการ)
 TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
 
-# มี Token และทดสอบ Route (36 รายการ ดูข้อจำกัดด้านล่าง)
+# มี Token และทดสอบ Route (35 รายการ ดูข้อจำกัดด้านล่าง)
 RUN_ROUTES=1 TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
 ```
 
@@ -308,11 +308,10 @@ curl -i -H "Authorization: Bearer $TOKEN" "$API_URL/rates"   # มี Token → 
 - JWT Authorizer ของ HTTP API ตรวจ `cognito:groups` ไม่ได้ สิทธิ์ตามบทบาทจึงต้องตรวจซ้ำในทุก Lambda หาก Lambda ตัวใดลืมตรวจ จะเปิดสิทธิ์เกินได้
 - หน้าเว็บเก็บ Token ใน `localStorage` (ใช้ร่วมกันหลายแท็บ) จึงเสี่ยงหากหน้าเว็บมีช่องโหว่ XSS
 - `get-token.sh` ต้องเปิด `ALLOW_USER_PASSWORD_AUTH` ใน App Client
-- การทดสอบ Route (`RUN_ROUTES=1`) ยังเป็นของ V2 ผลล่าสุด 34/36 รายการ `GET /claims` ได้ `403` เพราะสคริปต์ส่ง `userId=u001` ตายตัว (Lambda ไม่ให้ดูคำขอของผู้อื่น) และ `POST /claims` ได้ `400` เพราะ body ยังเป็นรูปแบบ V2 (V3 ใช้ `offeringId`, `month`, `items[].workDate/startTime/endTime`) ทั้งสองเป็นปัญหาของสคริปต์ ไม่ใช่ API
+- การทดสอบ Route (`RUN_ROUTES=1`) ยังเป็นของ V2 ผ่าน 33/35 รายการ `GET /claims` ได้ `403` เพราะสคริปต์ส่ง `userId=u001` ตายตัว (Lambda ไม่ให้ดูคำขอของผู้อื่น) และ `POST /claims` ได้ `400` เพราะ body ยังเป็นรูปแบบ V2 (V3 ใช้ `offeringId`, `month`, `items[].workDate/startTime/endTime`) ทั้งสองเป็นปัญหาของสคริปต์ ไม่ใช่ API
 - Smoke test ยังไม่ครอบคลุมกรณีสำเร็จของ Route V3
 - ยังไม่ได้ยืนยันว่าการอัปโหลดและดาวน์โหลดผ่าน Presigned URL ใช้งานได้หลังเปลี่ยน `cookierun-uploads` เป็น SSE-KMS (Acceptance Criteria ที่ยังเปิดอยู่ใน #80)
-- `openapi.yaml` และ API Gateway ยังมี Route `/work-days` (5 Route) และ `GET /current-period` ที่ผูกกับ `cookierun-workDays` / `cookierun-getCurrentPeriod` ซึ่งยังไม่มีใน AWS จึงใช้งานไม่ได้ จะปรับ API ให้ตรงกับ Lambda ภายหลัง
-- การยื่นคำขอ (`submit`) ยังไม่ถูกบันทึกใน `claim_actions` เพราะ `cookierun-submitClaim` ตั้ง `CLAIM_ACTIONS_ENABLED=0`
+- การยื่นคำขอ (`submit`) ยังไม่ถูกบันทึกใน `claims_histories` เพราะ `cookierun-submitClaim` ตั้ง `CLAIM_ACTIONS_ENABLED=0`
 - Lambda ทุกตัวใช้ IAM Role เดียวกัน (`cookierun-lambda-role`) สิทธิ์ของแต่ละฟังก์ชันจึงกว้างกว่าที่จำเป็น ยังไม่เป็นไปตามหลัก Least Privilege
 - Lambda ยัง deploy และอัปเดต Layer ผ่าน Console ทีละตัว ส่วน API Gateway ตั้งค่าด้วยสคริปต์ CLI ยังไม่ใช่ Infrastructure as Code
 - การ import `openapi.yaml` ซ้ำจะเขียนทับค่า CORS และ Authorizer ทั้งหมด ต้องรันสคริปต์จาก `main` ล่าสุดเท่านั้น

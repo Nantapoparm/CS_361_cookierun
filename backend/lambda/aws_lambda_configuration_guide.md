@@ -46,7 +46,7 @@ Lambda Functions ทุกตัวในระบบ V3 จำเป็นต�
 | `ACADEMIC_YEAR_OFFSET` | `543` (หรือ `0`) | ส่วนต่างการแปลงปี พ.ศ. $\leftrightarrow$ ค.ศ. (ตั้ง `543` หาก DB บันทึกเป็น ค.ศ.) |
 | `PRINT_STATUS_SIGN_WITH_STAFF_ID` | `1` | `statusId` ในตาราง `print_status` สำหรับช่องทาง "ยื่นแล้วไปเซ็นที่คณะ" |
 | `PRINT_STATUS_SELF_PRINT_ID` | `2` | `statusId` ในตาราง `print_status` สำหรับช่องทาง "ปริ้นเซ็นเอง" |
-| `CLAIM_ACTIONS_ENABLED` | `1` | สวิตช์เปิด (`1`) / ปิด (`0`) การบันทึก Audit Log ลงตาราง `claim_actions` |
+| `CLAIM_ACTIONS_ENABLED` | `1` | สวิตช์เปิด (`1`) / ปิด (`0`) การบันทึก Audit Log ลงตาราง `claims_histories` |
 | `UPLOAD_BUCKET` / `S3_UPLOADS_BUCKET` | `cookierun-uploads` | ชื่อ AWS S3 Bucket สำหรับเก็บเอกสารและไฟล์ PDF |
 
 ### 2.3 ตัวแปรเสริม/ค่าเริ่มต้น (Optional Configuration)
@@ -121,7 +121,7 @@ python/
   - บันทึกช่องทางยื่นเอกสาร (`printMethod`: `sign_with_staff` / `self_print`)
   - ตรวจสอบการเบิกวันทำงานซ้ำกับคำขออื่น
   - ตรวจสอบเพดานชั่วโมงและยอดเงินสูงสุด
-  - เปลี่ยนสถานะผ่าน State Machine และบันทึก Audit Log ลง `claim_actions`
+  - เปลี่ยนสถานะผ่าน State Machine และบันทึก Audit Log ลง `claims_histories`
 
 #### 9. `cookierun-claimWorkflow`
 - **Routes:** 
@@ -152,7 +152,7 @@ Lambda ในกลุ่มนี้ใช้การยืนยันตั�
 | `/admin/claims` | `GET` | ดึงรายการคำขอทั้งหมด ค้นหา/กรองได้ตามบทบาท, สถานะ, เดือน, หรือข้อความค้นหา พร้อมสรุปจำนวนแยกตามสถานะ (`counts`) |
 | `/admin/claims/{id}` | `GET` | ดึงรายละเอียดคำขอฉบับเต็มเพื่อนำไปตรวจสอบ (ตารางสอนเทียบชั่วโมงสะสม) |
 | `/admin/claims/{id}/review` | `POST` | บันทึกผลการตรวจคำขอ: <br>• `approve`: อนุมัติคำขอ (`submitted` $\rightarrow$ `approved`) <br>• `reject`: ปฏิเสธคำขอ (`submitted` $\rightarrow$ `rejected`) <br>• `return`: ส่งกลับแก้ไข (`submitted` $\rightarrow$ `returned` พร้อมระบุ `workIds` และหมายเหตุ) |
-| `/admin/claims/{id}/printed` | `POST` | บันทึกว่าเจ้าหน้าที่ได้พิมพ์เอกสารออกมาแล้วลงใน `claim_actions` เพื่อป้องกันการพิมพ์ซ้ำ |
+| `/admin/claims/{id}/printed` | `POST` | บันทึกว่าเจ้าหน้าที่ได้พิมพ์เอกสารออกมาแล้วลงใน `claims_histories` เพื่อป้องกันการพิมพ์ซ้ำ |
 | `/admin/claims/{id}/documents-received` | `POST` | บันทึกการได้รับเอกสารฉบับเซ็นชื่อจริง (`approved` $\rightarrow$ `documents_received`) |
 | `/admin/claims/send-to-finance` | `POST` | เปลี่ยนสถานะคำขอแบบเป็นชุด (Batch Operation) เพื่อส่งเรื่องไปยังฝั่งการเงิน (`documents_received` $\rightarrow$ `sent_to_finance`) |
 
