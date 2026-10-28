@@ -10,8 +10,17 @@ const API_CONFIG = {
   // สวิตช์เปิด/ปิด mock: true = ใช้ข้อมูลจำลองใน localStorage ; false = เรียก API จริงที่ BASE_URL
   USE_MOCK: false,
   // URL ของ API Gateway (ไม่มี / ท้าย) อ่านจาก config.js ของคนที่ 1 ก่อน
-  BASE_URL: window.APP_CONFIG?.apiBaseUrl || 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com'
+  BASE_URL: window.APP_CONFIG?.apiBaseUrl || 'https://39eee8bl4b.execute-api.us-east-1.amazonaws.com',
+  // ปุ่มที่ต้องใช้ route ใหม่ (FIX-03/04/05) — เปิดเป็น true เมื่อ Lambda + route บน API Gateway พร้อมแล้ว
+  // โหมด mock เปิดทุกปุ่มเสมอ
+  FEATURES: {
+    cancelClaim: false,  // POST /claims/{id}/cancel           ผู้ขอยกเลิก submitted → draft
+    deleteDraft: false,  // DELETE /claims/{id}                ผู้ขอลบร่าง
+    adminCancel: false,  // POST /admin/claims/{id}/cancel     เจ้าหน้าที่ยกเลิก (note บังคับ)
+    markPaid: false      // POST /admin/claims/mark-paid       sent_to_finance → paid
+  }
 };
+const feature = (k) => API_CONFIG.USE_MOCK || !!API_CONFIG.FEATURES[k];
 
 // หน้าแรกของแต่ละบทบาทหลังเข้าสู่ระบบ
 const ROLE_HOME = { instructor: 'home.html', ta: 'home.html', student_helper: 'home.html', admin: 'admin.html' };
@@ -255,6 +264,9 @@ const api = {
   updateClaim:     async (id, body) => normClaim(await request('PUT',  `/claims/${encodeURIComponent(id)}`, body)),
   submitClaim:     async (id, printMethod) => normClaim(await request('POST', `/claims/${encodeURIComponent(id)}/submit`, { printMethod })),
   setPrintMethod:  async (id, printMethod) => normClaim(await request('PUT', `/claims/${encodeURIComponent(id)}/print-method`, { printMethod })),
+  // FIX-04 ผู้ขอยกเลิกคำขอที่ยังรอตรวจ → กลับเป็นร่าง ; FIX-05 ลบร่างของตนเอง
+  cancelClaim:     (id, reason = '') => request('POST', `/claims/${encodeURIComponent(id)}/cancel`, reason ? { reason } : {}),
+  deleteClaim:     (id) => request('DELETE', `/claims/${encodeURIComponent(id)}`),
   getActions:      async (id) => ((await request('GET', `/claims/${encodeURIComponent(id)}/actions`)) || []).map(normAction),
   // type = claim | makeup | blank → { downloadUrl, expiresIn } (mock: downloadUrl = null → หน้าเว็บวาดตัวอย่างเอง)
   getPdf:          (id, type = 'claim', extra = {}) => request('GET', `/claims/${encodeURIComponent(id)}/pdf` + qs({ type, ...extra })),
@@ -262,7 +274,9 @@ const api = {
   // เจ้าหน้าที่ — f = { role, status, month (รอบ YYYY-MM), offeringId, printMethod, q } → { counts:{status:n}, items:[claim + requesterName, printedAt] }
   adminClaims: async (f = {}) => {
     const d = await request('GET', '/admin/claims' + qs(f));
-    return { counts: d?.counts || {}, items: (d?.items || []).map(normClaim) };
+    // ร่างเป็นของผู้ขอเท่านั้น (รวมคำขอที่ผู้ขอยกเลิกกลับเป็นร่าง) — API ยังส่งมา จึงกรองที่นี่ (FIX-04)
+    const { draft, ...counts } = d?.counts || {};
+    return { counts, items: (d?.items || []).map(normClaim).filter((c) => c.status !== 'draft') };
   },
   // รายละเอียดสำหรับตรวจ: claim + schedule (คาบในตารางสอนของเดือนนั้น), termHours, maxHours, duplicates, actions
   adminClaim: async (id) => {
@@ -274,6 +288,8 @@ const api = {
   markPrinted:     async (id) => normClaim(await request('POST', `/admin/claims/${encodeURIComponent(id)}/printed`)),
   receiveDocs:     async (id) => normClaim(await request('POST', `/admin/claims/${encodeURIComponent(id)}/documents-received`)),
   sendToFinance:   (claimIds) => request('POST', '/admin/claims/send-to-finance', { claimIds }),
+  markPaid:        (claimIds) => request('POST', '/admin/claims/mark-paid', { claimIds }),            // FIX-03
+  adminCancel:     (id, note) => request('POST', `/admin/claims/${encodeURIComponent(id)}/cancel`, { note }), // FIX-04
 
   getTerms:        async ()   => normTerms(await request('GET', '/terms')),  // → [{ id:'1-2569', name, billingCycles }]
   getRates:        ()         => request('GET', '/rates')                    // → [{ role, ratePerHour, maxHours, maxHoursHalfLoad|null, maxAmountPerDay? }]
@@ -283,6 +299,8 @@ const api = {
 
 const STATUS = CLAIM_STATUS;
 const EDITABLE = ['draft', 'returned']; // API ตอบ 409 INVALID_STATE ถ้าแก้สถานะอื่น
+// สถานะที่เจ้าหน้าที่ยกเลิกได้ (ข้อเสนอใน FIX-04: ก่อนส่งการเงิน — รอทีมยืนยัน)
+const ADMIN_CANCELLABLE = ['submitted', 'returned', 'approved', 'documents_received'];
 const ROLE_TH = { instructor: 'อาจารย์', ta: 'ผู้ช่วยสอน', student_helper: 'นักศึกษาช่วยงาน' };
 const KIND_TH = { regular: 'ตาราง', makeup: 'ชดเชย', manual: 'เพิ่มเอง', cancelled: 'งดสอน' };
 const TYPE_TH = { lecture: 'ภาคทฤษฎี', lab: 'ภาคปฏิบัติ' };
@@ -308,7 +326,7 @@ const capOf = (rates, role, load) => {
   return load === 'half' && r.maxHoursHalfLoad ? r.maxHoursHalfLoad : (r.maxHours || 0);
 };
 const LOAD_TH = { full: 'เต็ม Load', half: 'ครึ่ง Load' };
-const COUNTED = ['submitted', 'approved', 'documents_received', 'sent_to_finance']; // นับเป็น "เบิกแล้ว"
+const COUNTED = ['submitted', 'approved', 'documents_received', 'sent_to_finance', 'paid']; // นับเป็น "เบิกแล้ว"
 // ชั่วโมงที่ยื่นแล้วในภาคนี้ (ไม่นับร่าง ส่งกลับ ไม่อนุมัติ และคำขอที่กำลังแก้) — อาจารย์นับเฉพาะวิชานั้น
 function claimedHours(claims, { term, role, offeringId, except }) {
   return Math.round(claims.filter((c) => c.term === term && COUNTED.includes(c.status) && c.claimId !== except &&
@@ -763,7 +781,7 @@ async function mockRequest(method, path, body) {
     return done(mockView(claim));
   }
 
-  const cm = p.match(/^\/claims\/([^/]+)(?:\/(submit|print-method|actions|pdf))?$/);
+  const cm = p.match(/^\/claims\/([^/]+)(?:\/(submit|print-method|actions|pdf|cancel))?$/);
   if (cm) {
     const c = mine(cm[1]), sub = cm[2], now = mockNow();
     if (!sub && method === 'GET') return done(mockView(c));
@@ -791,6 +809,18 @@ async function mockRequest(method, path, body) {
       Object.assign(c, { status: 'submitted', printMethod: body.printMethod, submittedAt: now, updatedAt: now, dayClaim: todayIso(), revision: (c.revision || 0) + 1, cycle: per.cycle, deadline: per.deadline });
       log(c, from === 'returned' ? 'resubmitted' : 'submitted', from, 'submitted', from === 'returned' ? (body.note || null) : null);
       return done(mockView(c));
+    }
+    if (sub === 'cancel' && method === 'POST') {
+      if (c.status !== 'submitted') throw conflict('ยกเลิกได้เฉพาะคำขอที่เจ้าหน้าที่ยังไม่ได้ตรวจ');
+      Object.assign(c, { status: 'draft', printMethod: null, updatedAt: now });
+      log(c, 'cancelled', 'submitted', 'draft', String(body?.reason || '').trim() || null);
+      return done({ message: 'ยกเลิกคำขอสำเร็จ', from: 'submitted', to: 'draft' });
+    }
+    if (!sub && method === 'DELETE') {
+      if (c.status !== 'draft') throw conflict('ลบได้เฉพาะคำขอที่เป็นร่าง');
+      db.claims = db.claims.filter((x) => x.claimId !== c.claimId);
+      db.actions = db.actions.filter((a) => a.claimId !== c.claimId);
+      return done({ message: 'ลบร่างสำเร็จ', claimId: c.claimId });
     }
     if (sub === 'print-method' && method === 'PUT') {
       if (body?.printMethod !== 'sign_with_staff') throw bad('เปลี่ยนได้เฉพาะเป็น sign_with_staff');
@@ -826,7 +856,16 @@ async function mockRequest(method, path, body) {
       list.forEach((c) => { Object.assign(c, { status: 'sent_to_finance', updatedAt: now }); log(c, 'sent_to_finance', 'documents_received', 'sent_to_finance'); });
       return done(list.map(adminView));
     }
-    const am = p.match(/^\/admin\/claims\/([^/]+)(?:\/(review|printed|documents-received))?$/);
+    if (p === '/admin/claims/mark-paid' && method === 'POST') {
+      const ids = Array.isArray(body?.claimIds) ? body.claimIds.map(String) : [];
+      if (!ids.length) throw bad('ต้องระบุ claimIds อย่างน้อย 1 รายการ');
+      const list = ids.map(find);
+      const wrong = list.filter((c) => c.status !== 'sent_to_finance');
+      if (wrong.length) throw conflict(`คำขอ ${wrong.map((c) => '#' + c.claimId).join(', ')} ยังไม่ได้ส่งการเงิน`);
+      list.forEach((c) => { Object.assign(c, { status: 'paid', updatedAt: now }); log(c, 'paid', 'sent_to_finance', 'paid'); });
+      return done({ message: `บันทึกเงินเข้าสำเร็จจำนวน ${list.length} รายการ`, updatedClaims: list.map((c) => c.claimId) });
+    }
+    const am = p.match(/^\/admin\/claims\/([^/]+)(?:\/(review|printed|documents-received|cancel))?$/);
     if (am) {
       const c = find(am[1]), sub = am[2];
       if (!sub && method === 'GET') {
@@ -858,6 +897,15 @@ async function mockRequest(method, path, body) {
         c.printedAt = now;
         log(c, 'printed', null, null);
         return done(adminView(c));
+      }
+      if (sub === 'cancel' && method === 'POST') {
+        const note = String(body?.note || '').trim();
+        if (!note) throw bad('กรุณาระบุเหตุผลที่ยกเลิก');
+        if (!ADMIN_CANCELLABLE.includes(c.status)) throw conflict('ยกเลิกได้เฉพาะคำขอที่ยังไม่ส่งการเงิน');
+        const from = c.status;
+        Object.assign(c, { status: 'draft', printMethod: null, printedAt: null, updatedAt: now });
+        log(c, 'cancelled', from, 'draft', note);
+        return done({ message: 'เปลี่ยนสถานะสำเร็จเป็น draft', from, to: 'draft' });
       }
       if (sub === 'documents-received' && method === 'POST') {
         if (c.status !== 'approved') throw conflict('รับเอกสารได้เฉพาะคำขอที่ตรวจผ่านแล้ว');

@@ -59,10 +59,23 @@ const MARK = { ok: '✓', warn: '!', bad: '✕' };
 const ACTION_TH = {
   autofill: 'สร้างร่างจากปฏิทิน', created: 'สร้างร่าง (กรอกเอง)', preview: 'ผู้ขอดูตัวอย่าง PDF', submitted: 'ยื่นคำขอ', resubmitted: 'ยื่นใหม่',
   returned: 'ส่งกลับแก้ไข', approved: 'ตรวจผ่าน', rejected: 'ไม่อนุมัติ', printed: 'พิมพ์เอกสาร', documents_received: 'รับเอกสารแล้ว',
-  sent_to_finance: 'ส่งการเงิน', downloaded: 'ดาวน์โหลด PDF', print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่', makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
+  sent_to_finance: 'ส่งการเงิน', paid: 'บันทึกเงินเข้า', cancelled: 'ยกเลิกคำขอ', downloaded: 'ดาวน์โหลด PDF', print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่', makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
 };
 
 // กล่องการกระทำด้านขวา ตามสถานะ
+// ปุ่มเสริมใต้กล่องการกระทำ: ยกเลิกคำขอ (FIX-04) · บันทึกเงินเข้า (FIX-03)
+function extraCard() {
+  const c = claim;
+  if (c.status === 'sent_to_finance' && feature('markPaid')) {
+    return `<section class="card"><h3>ส่งการเงินแล้ว</h3><p class="muted section-gap">เมื่อการเงินโอนเข้าบัญชีผู้ขอแล้ว ให้บันทึกว่าเงินเข้า</p>
+      <button type="button" class="btn block section-gap" id="btnPaid">บันทึกว่าเงินเข้าแล้ว</button></section>`;
+  }
+  if (ADMIN_CANCELLABLE.includes(c.status) && feature('adminCancel')) {
+    return '<button type="button" class="link-btn danger-link" id="btnCancel">ยกเลิกคำขอนี้</button>';
+  }
+  return '';
+}
+
 function actionCard() {
   const c = claim;
   if (c.status === 'submitted') {
@@ -133,6 +146,7 @@ function render() {
           <ul class="checks section-gap">${checks(rows).map(([t, s]) => `<li class="${t}"><span class="mk" aria-hidden="true">${MARK[t]}</span>${esc(s)}</li>`).join('')}</ul>
           <p class="muted">ข้อมูลประกอบการตรวจ เจ้าหน้าที่เป็นผู้ตัดสิน</p></section>
         ${actionCard()}
+        ${extraCard()}
         <section class="card"><h3>ประวัติการดำเนินการ</h3><ul class="timeline section-gap">${hist}</ul></section>
       </aside>
     </div>`;
@@ -148,6 +162,41 @@ function bind(rows) {
     if (done[0]) { await reload(); toast(`บันทึกว่าพิมพ์ #${claim.claimId} แล้ว`); }
   });
   $('btnRecv')?.addEventListener('click', receive);
+  $('btnCancel')?.addEventListener('click', cancelClaim);
+  $('btnPaid')?.addEventListener('click', markPaid);
+}
+
+// FIX-04 — เจ้าหน้าที่ยกเลิกคำขอ (หมายเหตุบังคับ) → กลับเป็นร่างของผู้ขอ
+async function cancelClaim() {
+  const ok = await openModal({
+    eyebrow: 'ยกเลิกคำขอ',
+    title: `#${claim.claimId} · ${claim.requesterName}`,
+    body: `${alertBox('danger', '', 'คำขอจะกลับเป็นร่างของผู้ขอและหายจากรายการของเจ้าหน้าที่ ผู้ขอแก้แล้วยื่นใหม่ได้')}
+      <div class="field"><label for="mNote">เหตุผล <span class="req">*</span></label><textarea id="mNote" rows="3" maxlength="500"></textarea></div>`,
+    okText: 'ยืนยันยกเลิก',
+    okClass: 'danger-solid',
+    validate: (el) => {
+      if (el.querySelector('#mNote').value.trim()) return true;
+      el.querySelector('.m-err').textContent = 'กรุณาใส่เหตุผล ผู้ขอจะเห็นข้อความนี้';
+      return false;
+    },
+    onOk: async (el) => { try { await api.adminCancel(claim.claimId, el.querySelector('#mNote').value.trim()); } catch (err) { throw new Error(errorText(err)); } }
+  });
+  if (!ok) return;
+  flash(`ยกเลิก #${claim.claimId} แล้ว`);
+  location.href = 'admin-claims.html';
+}
+
+// FIX-03 — sent_to_finance → paid
+async function markPaid() {
+  const ok = await openModal({
+    eyebrow: 'บันทึกเงินเข้า',
+    title: `เงินเข้าบัญชีของ #${claim.claimId} แล้ว?`,
+    body: `<dl class="kv"><dt>ผู้ขอ</dt><dd>${esc(claim.requesterName)}</dd><dt>ยอดเบิก</dt><dd>${esc(baht(claim.totalAmount))}</dd></dl>`,
+    okText: 'ยืนยันเงินเข้าแล้ว',
+    onOk: async () => { try { await api.markPaid([claim.claimId]); } catch (err) { throw new Error(errorText(err)); } }
+  });
+  if (ok) { await reload(); toast(`บันทึกเงินเข้า #${claim.claimId} แล้ว`); }
 }
 
 async function reload() { claim = await api.adminClaim(claim.claimId); render(); }

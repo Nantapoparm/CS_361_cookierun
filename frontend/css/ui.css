@@ -58,6 +58,7 @@ body.app .content { max-width: var(--app-max); }
 .chip.self, .status.approved { background: var(--st-self-bg); color: var(--st-self); }
 .chip.recv { background: var(--st-recv-bg); color: var(--st-recv); }
 .chip.done { background: var(--st-done-bg); color: var(--st-done); }
+.chip.paid { background: var(--st-done); color: #fff; }
 .chip.rej, .status.rejected { background: var(--st-rej-bg); color: var(--st-rej); }
 
 /* ป้ายบทบาท / ป้ายเล็กไม่มีจุด */

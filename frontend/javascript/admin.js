@@ -46,7 +46,7 @@ async function load() {
     $('sSub').innerHTML = statHtml(pending.length, 'รอตรวจ');
     $('sRet').innerHTML = statHtml(by('returned'), 'ส่งกลับแก้ไข');
     $('sSign').innerHTML = statHtml(`${by('sign')} · ${by('self')}`, 'รอเซ็น · รอรับเอกสาร (ปริ้นเอง)');
-    $('sDone').innerHTML = statHtml(inRound.filter((c) => c.status === 'sent_to_finance').length, 'ส่งการเงินแล้ว (รอบนี้)');
+    $('sDone').innerHTML = statHtml(inRound.filter((c) => ['sent_to_finance', 'paid'].includes(c.status)).length, 'ส่งการเงินแล้ว (รอบนี้)');
 
     $('rows').innerHTML = pending.slice(0, 5).map(pendRow).join('') ||
       `<tr class="empty-row"><td colspan="8">${emptyState('ไม่มีคำขอรอตรวจ', 'คำขอที่ผู้ใช้ยื่นใหม่จะขึ้นที่นี่')}</td></tr>`;

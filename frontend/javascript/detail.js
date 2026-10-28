@@ -6,7 +6,7 @@
 let user, claim, actions = [];
 const student = () => user.role === 'student_helper';
 const docHtml = () => (student() ? blankDocHtml(claim) : claimDocHtml(claim, user));
-const AFTER_OK = ['approved', 'documents_received', 'sent_to_finance'];
+const AFTER_OK = ['approved', 'documents_received', 'sent_to_finance', 'paid'];
 
 // ข้อความประวัติจาก claim_actions
 function actionText(a) {
@@ -23,6 +23,8 @@ function actionText(a) {
     printed: `${a.actor} พิมพ์เอกสารแล้ว`,
     documents_received: `${a.actor} รับเอกสารฉบับเซ็นแล้ว`,
     sent_to_finance: `${a.actor} ส่งการเงินแล้ว`,
+    paid: `${a.actor} บันทึกว่าเงินเข้าแล้ว`,
+    cancelled: `${a.actor} ยกเลิกคำขอ · กลับเป็นร่าง${a.note ? ` (${a.note})` : ''}`,
     downloaded: `${a.actor ? `${a.actor} ` : ''}ดาวน์โหลด PDF`,
     print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่',
     makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
@@ -70,7 +72,11 @@ function nextBox(resubmitted) {
     }
     case 'sent_to_finance': {
       const a = lastAction('sent_to_finance');
-      return alertHtml('success', `<b>ส่งการเงินแล้ว</b>${a ? ` — ${esc(thDateTime(a.createdAt))}` : ''} · ขั้นตอนของคุณเสร็จครบแล้ว`);
+      return alertHtml('success', `<b>ส่งการเงินแล้ว</b>${a ? ` — ${esc(thDateTime(a.createdAt))}` : ''} · รอการเงินโอนเข้าบัญชี ไม่ต้องทำอะไรเพิ่ม`);
+    }
+    case 'paid': {
+      const a = lastAction('paid');
+      return alertHtml('success', `<b>เงินเข้าเรียบร้อยแล้ว</b>${a ? ` — ${esc(thDateTime(a.createdAt))}` : ''} · คำขอนี้เสร็จสมบูรณ์`);
     }
     default: return '';
   }
@@ -82,7 +88,12 @@ function render(resubmitted) {
   $('eyebrow').innerHTML = `<a href="dashboard.html">ประวัติคำขอ</a> › #${esc(c.claimId)}`;
   $('title').textContent = `คำขอ #${c.claimId} · ${courseShort(c)}`;
   $('lead').textContent = `งานเดือน ${thMonth(c.month)}${c.deadline ? ` · รอบที่ ${cycleOf(c)} (ภายใน ${thDate(c.deadline, false)})` : ''}`;
-  $('tools').innerHTML = `<a class="btn ghost" href="dashboard.html">← กลับรายการ</a>${editable ? `<a class="btn" href="form.html?id=${encodeURIComponent(c.claimId)}">แก้ไขคำขอ</a>` : ''}`;
+  // ยกเลิก: เฉพาะคำขอที่เจ้าหน้าที่ยังไม่ได้ตรวจ (FIX-04) ; ลบ: เฉพาะร่าง (FIX-05)
+  const canCancel = c.status === 'submitted' && feature('cancelClaim');
+  const canDelete = c.status === 'draft' && feature('deleteDraft');
+  $('tools').innerHTML = `<a class="btn ghost" href="dashboard.html">← กลับรายการ</a>${canCancel ? '<button type="button" class="btn danger" id="btnCancel">ยกเลิกคำขอ</button>' : ''}${canDelete ? '<button type="button" class="btn danger" id="btnDelete">ลบร่าง</button>' : ''}${editable ? `<a class="btn" href="form.html?id=${encodeURIComponent(c.claimId)}">แก้ไขคำขอ</a>` : ''}`;
+  $('btnCancel')?.addEventListener('click', cancelClaim);
+  $('btnDelete')?.addEventListener('click', deleteDraft);
 
   const self = c.printMethod === 'self_print';
   const lockedPdf = self && !AFTER_OK.includes(c.status) && !editable;
@@ -155,6 +166,39 @@ async function switchMethod() {
     onOk: async () => { try { claim = await api.setPrintMethod(claim.claimId, 'sign_with_staff'); } catch (err) { throw new Error(errorText(err)); } }
   });
   if (ok) { actions = await api.getActions(claim.claimId).catch(() => actions); toast('เปลี่ยนเป็นเซ็นกับเจ้าหน้าที่แล้ว'); render(); }
+}
+
+// FIX-04 — ยกเลิกคำขอที่ยังรอตรวจ → กลับเป็นร่าง (แก้แล้วยื่นใหม่ หรือลบได้)
+async function cancelClaim() {
+  const ok = await openModal({
+    eyebrow: 'ยกเลิกคำขอ',
+    title: `ยกเลิกคำขอ #${claim.claimId}?`,
+    body: `${alertBox('warn', '', 'คำขอจะกลับเป็นร่างและหายจากรายการของเจ้าหน้าที่ — แก้ไขแล้วยื่นใหม่ หรือลบร่างทิ้งได้')}
+      <div class="field"><label for="mReason">เหตุผล (ไม่บังคับ)</label><textarea id="mReason" rows="2" maxlength="500" placeholder="เช่น กรอกเวลาผิด"></textarea></div>`,
+    okText: 'ยืนยันยกเลิก',
+    okClass: 'danger',
+    onOk: async (el) => {
+      try { await api.cancelClaim(claim.claimId, el.querySelector('#mReason').value.trim()); } catch (err) { throw new Error(errorText(err)); }
+    }
+  });
+  if (!ok) return;
+  claim = await api.getClaim(claim.claimId);
+  actions = await api.getActions(claim.claimId).catch(() => actions);
+  toast(`ยกเลิกคำขอ #${claim.claimId} แล้ว · กลับเป็นร่าง`);
+  render();
+}
+
+// FIX-05 — ลบร่าง (คาบในร่างนี้กลับไปเลือกสร้างคำขอใหม่ได้)
+async function deleteDraft() {
+  const ok = await openModal({
+    eyebrow: 'ลบร่าง',
+    title: `ลบร่าง #${claim.claimId}?`,
+    lead: 'ลบแล้วกู้คืนไม่ได้ คาบในร่างนี้จะกลับไปเลือกสร้างคำขอใหม่ได้',
+    okText: 'ลบร่าง',
+    okClass: 'danger',
+    onOk: async () => { try { await api.deleteClaim(claim.claimId); } catch (err) { throw new Error(errorText(err)); } }
+  });
+  if (ok) location.href = 'dashboard.html';
 }
 
 async function init() {
