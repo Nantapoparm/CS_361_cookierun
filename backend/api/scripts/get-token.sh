@@ -10,8 +10,10 @@
 # ต้องเปิด ALLOW_USER_PASSWORD_AUTH ใน App Client (Cognito → App clients → Authentication flows)
 #
 # กันรหัสผ่านหลุด:
-#   - ส่ง username / password ให้ AWS CLI เป็น JSON ทาง stdin ไม่ใส่ใน argument ของคำสั่ง
+#   - ส่ง username / password ให้ AWS CLI เป็นไฟล์ JSON ชั่วคราว ไม่ใส่ใน argument ของคำสั่ง
 #     (argument เห็นได้ใน process list และ AWS CLI พิมพ์ argument ทั้งก้อนออกมาเมื่อ parse ไม่ผ่าน)
+#     ไฟล์อยู่ในโฟลเดอร์ที่เปิดได้เฉพาะเจ้าของ และลบทันทีหลังเรียก AWS
+#     ไม่ใช้ file:///dev/stdin เพราะ AWS CLI v2 อ่านได้ค่าว่าง (Invalid JSON received)
 #   - ไม่แสดง error ดิบของ AWS CLI แสดงเฉพาะชื่อ error
 #   - username ต้องเป็น email ไม่อย่างนั้นหยุดก่อนถามรหัสผ่าน (กันข้อความที่วางเข้ามาผิดช่อง)
 set -euo pipefail
@@ -48,15 +50,37 @@ if [ -z "$COGNITO_PASS" ]; then
   echo "ไม่ได้ใส่รหัสผ่าน" >&2; exit 1
 fi
 
-ERR_FILE=$(mktemp)
-trap 'rm -f "$ERR_FILE"' EXIT
+WORK_DIR=$(mktemp -d)   # สิทธิ์ 700 เปิดได้เฉพาะเจ้าของ
+REQ_FILE="$WORK_DIR/request.json"
+ERR_FILE="$WORK_DIR/error.txt"
+# ลบเฉพาะไฟล์ที่สคริปต์สร้าง แล้ว rmdir (ลบได้เฉพาะโฟลเดอร์ว่าง) ไม่ใช้ rm -rf กับตัวแปร
+cleanup() {
+  [ -n "${WORK_DIR:-}" ] || return 0
+  rm -f -- "$REQ_FILE" "$ERR_FILE"
+  rmdir -- "$WORK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM   # Ctrl+C ก็ยังลบไฟล์ผ่าน trap EXIT
 
 # printf เป็น builtin ของ bash รหัสผ่านจึงไม่ไปอยู่ใน argument ของ process ใด
-if ! TOKEN=$(printf '{"AuthFlow":"USER_PASSWORD_AUTH","ClientId":%s,"AuthParameters":{"USERNAME":%s,"PASSWORD":%s}}' \
-      "$(json_str "$CLIENT_ID")" "$(json_str "$COGNITO_USER")" "$(json_str "$COGNITO_PASS")" \
-    | aws cognito-idp initiate-auth --region "$REGION" --cli-input-json file:///dev/stdin \
-        --query "AuthenticationResult.$TOKEN_TYPE" --output text 2>"$ERR_FILE"); then
-  unset COGNITO_PASS
+(
+  umask 077
+  printf '{"AuthFlow":"USER_PASSWORD_AUTH","ClientId":%s,"AuthParameters":{"USERNAME":%s,"PASSWORD":%s}}' \
+    "$(json_str "$CLIENT_ID")" "$(json_str "$COGNITO_USER")" "$(json_str "$COGNITO_PASS")" > "$REQ_FILE"
+)
+unset COGNITO_PASS
+
+REQ_URI="file://$REQ_FILE"
+if command -v cygpath >/dev/null 2>&1; then
+  REQ_URI="file://$(cygpath -m "$REQ_FILE")"   # Git Bash บน Windows: aws.exe ต้องใช้ path แบบ Windows
+fi
+
+AWS_OK=1
+TOKEN=$(aws cognito-idp initiate-auth --region "$REGION" --cli-input-json "$REQ_URI" \
+  --query "AuthenticationResult.$TOKEN_TYPE" --output text 2>"$ERR_FILE") || AWS_OK=0
+rm -f "$REQ_FILE"
+
+if [ "$AWS_OK" != 1 ]; then
   CODE=$(grep -oE '\([A-Za-z]+(Exception|Error|Validation)\)' "$ERR_FILE" | head -1 | tr -d '()' || true)
   case "$CODE" in
     NotAuthorizedException) HINT="username หรือรหัสผ่านไม่ถูกต้อง หรือ App Client ยังไม่เปิด ALLOW_USER_PASSWORD_AUTH" ;;
@@ -68,7 +92,6 @@ if ! TOKEN=$(printf '{"AuthFlow":"USER_PASSWORD_AUTH","ClientId":%s,"AuthParamet
   echo "ขอ token ไม่สำเร็จ (${CODE:-error}): $HINT" >&2
   exit 1
 fi
-unset COGNITO_PASS
 
 if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then
   echo "ไม่ได้ token (บัญชีอาจติด challenge เช่น NEW_PASSWORD_REQUIRED)" >&2; exit 1
