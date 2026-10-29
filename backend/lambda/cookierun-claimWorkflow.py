@@ -3,8 +3,8 @@ Lambda Function: cookierun-claimWorkflow
 รองรับ Endpoints เกี่ยวกับ Workflow ฝั่งผู้ใช้ใน V3:
   1. PUT /claims/{id}/print-method  -> update_print_method (เปลี่ยนช่องทางยื่น)
   2. GET /claims/{id}/actions       -> list_claim_actions (ดูประวัติการดำเนินการ)
+  3. POST /claims/{id}/cancel       -> cancel_claim (ผู้ขอยกเลิกคำขอ submitted -> draft) 
 
-ผู้รับผิดชอบ: คนที่ 3 (V3-10 / V3-84)
 Lambda URI ใน openapi.yaml: cookierun-claimWorkflow
 """
 import os
@@ -14,6 +14,7 @@ from validation import (
     ACTIONS_TABLE,
     STATUS_KEY_BY_NAME,
     actions_enabled,
+    apply_transition,
     load_owned_claim,
     log_action,
     parse_print_method,
@@ -45,6 +46,10 @@ def _route_workflow(conn, auth, event):
     if method == "GET" and path.endswith("/actions"):
         return _list_claim_actions(conn, auth, event)
 
+    # Route 3: POST /claims/{id}/cancel (FIX-04)
+    if method == "POST" and path.endswith("/cancel"):
+        return _cancel_claim(conn, auth, event)
+
     raise ApiError(404, "ไม่พบ Route ที่เรียก")
 
 
@@ -72,7 +77,7 @@ def _update_print_method(conn, auth, event):
             (new_status_id, claim_id),
         )
 
-    # 4. บันทึกประวัติลง claim_actions (ถ้าเปิดใช้งาน)
+    # 4. บันทึกประวัติลง claims_histories (ถ้าเปิดใช้งาน)
     log_action(
         conn,
         claim_id=claim_id,
@@ -96,7 +101,7 @@ def _update_print_method(conn, auth, event):
 
 
 def _list_claim_actions(conn, auth, event):
-    """GET /claims/{id}/actions: ประวัติการดำเนินการของคำขอ (จาก claim_actions)
+    """GET /claims/{id}/actions: ประวัติการดำเนินการของคำขอ (จาก claims_histories)
     ผู้ใช้ทั่วไปเห็นเฉพาะคำขอของตนเอง"""
     user_id = auth["userId"]
     claim_id = path_claim_id(event)
@@ -109,6 +114,7 @@ def _list_claim_actions(conn, auth, event):
         return ok(200, [])
 
     c = ACTIONS_COLUMNS
+    id_col = f", ca.{c['id']}" if c.get("id") else ""
     sql = f"""
         SELECT 
             ca.{c['action']} AS action,
@@ -122,7 +128,7 @@ def _list_claim_actions(conn, auth, event):
         LEFT JOIN `status` s_to ON s_to.statusId = ca.{c['to']}
         LEFT JOIN user_information u ON u.userId = ca.{c['actor']}
         WHERE ca.{c['claim']} = %s
-        ORDER BY ca.{c['at']} ASC, ca.actionId ASC
+        ORDER BY ca.{c['at']} ASC{id_col}
     """
 
     with conn.cursor() as cur:
@@ -130,7 +136,6 @@ def _list_claim_actions(conn, auth, event):
             cur.execute(sql, (claim_id,))
             rows = cur.fetchall()
         except Exception:
-            # หากตารางยังไม่สมบูรณ์ คืนค่าอาเรย์ว่าง
             return ok(200, [])
 
     # 3. จัดรูปแบบ Response ให้อยู่ในโครงสร้างตาม openapi.yaml
@@ -148,3 +153,40 @@ def _list_claim_actions(conn, auth, event):
         )
 
     return ok(200, actions_data)
+
+
+# FIX-04: POST /claims/{id}/cancel
+def _cancel_claim(conn, auth, event):
+    """POST /claims/{id}/cancel: ผู้ขอยกเลิกคำขอตนเอง (submitted -> draft)"""
+    user_id = auth["userId"]
+    claim_id = path_claim_id(event)
+    body = parse_json_body(event)
+
+    # 1. ตรวจสอบความเป็นเจ้าของคำขอ
+    load_owned_claim(conn, claim_id, user_id, for_update=True)
+
+    reason = body.get("reason")
+    if reason and not isinstance(reason, str):
+        raise ApiError(400, "reason ต้องเป็นข้อความ")
+
+    # 2. เปลี่ยนสถานะ submitted -> draft
+    result = apply_transition(
+        conn,
+        claim_id=claim_id,
+        action="cancel",
+        actor_user_id=user_id,
+        actor_is_admin=False,
+        note=reason.strip() if reason else None,
+    )
+
+    conn.commit()
+
+    return ok(
+        200,
+        {
+            "message": "ยกเลิกคำขอสำเร็จ คำขอกลับเป็นร่าง",
+            "claimId": f"c{claim_id:03d}",
+            "from": result["from"],
+            "to": result["to"],
+        },
+    )
