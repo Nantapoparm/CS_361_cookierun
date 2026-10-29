@@ -54,10 +54,10 @@ API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh
 ## การทดสอบ
 
 ```bash
-# CORS และ JWT Authorizer ไม่มี token (23 รายการ)
+# CORS และ JWT Authorizer ไม่มี token (26 รายการ)
 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
 
-# มี token และทดสอบ route ของ V3 (48 รายการ) — ไม่สร้างข้อมูลจริง รันซ้ำได้
+# มี token และทดสอบ route ของ V3 (56 รายการ) — ไม่สร้างข้อมูลจริง รันซ้ำได้
 TOKEN=$(bash backend/api/scripts/get-token.sh)
 RUN_ROUTES=1 TOKEN="$TOKEN" API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
 ```

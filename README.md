@@ -198,7 +198,7 @@ RUN_ROUTES=1 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash
    │      JWT Authorizer (cognitoJwt) ตรวจลายเซ็น issuer + audience  ไม่ผ่าน = 401
    │      │                      └──► Amazon CloudWatch Logs   Access Log (sub, authError)
    │      ▼
-   │   AWS Lambda  V2: 8 ฟังก์ชัน / 8 Route   V3: 8 ฟังก์ชัน / 14 Route
+   │   AWS Lambda  V2: 8 ฟังก์ชัน / 8 Route   V3: 9 ฟังก์ชัน / 18 Route
    │      ├─ Lambda Layer (db.py)  อ่าน sub / cognito:groups จาก JWT ตรวจสิทธิ์ ตอบ 403
    │      ├─ IAM Role cookierun-lambda-role (ใช้ร่วมกันทุกฟังก์ชัน)
    │      │
@@ -220,9 +220,9 @@ AWS CloudTrail (cookierun-management-trail)                    Management Events
 | ยืนยันตัวตน | Amazon Cognito User Pool | บริการจัดการบัญชีและออก JWT สำเร็จรูป ไม่ต้องเก็บรหัสผ่านเอง ใช้กลุ่มแทนบทบาทได้ทันที |
 | ตรวจ Token | JWT Authorizer ของ HTTP API | ตรวจลายเซ็น อายุ issuer และ audience ให้เอง ไม่มีค่าใช้จ่ายเพิ่ม และ Request ที่ไม่มี Token ไม่ถึง Lambda / RDS เลย แต่ตรวจ `cognito:groups` ไม่ได้ จึงให้ Lambda ตรวจบทบาทต่อ |
 | ตรวจสิทธิ์ | Lambda Layer (`db.py`, `validation.py`) + `pymysql` | ใช้โค้ดอ่านผู้ใช้และตรวจสิทธิ์ชุดเดียวกันทุก Lambda จับคู่ `sub` กับ `user_information.cognitoSub` |
-| Logic | Lambda ของ V3 รวม Route ตามฟีเจอร์ (8 ฟังก์ชันสำหรับ 14 Route) | จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง แลกกับต้องแยกการทำงานด้วย `event.routeKey` ในโค้ด ดู [`docs/api-design.md`](docs/api-design.md#26-lambda-ของ-v3-รวม-route-ตามฟีเจอร์) |
+| Logic | Lambda ของ V3 รวม Route ตามฟีเจอร์ (9 ฟังก์ชันสำหรับ 18 Route) | จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง แลกกับต้องแยกการทำงานด้วย `event.routeKey` ในโค้ด ดู [`docs/api-design.md`](docs/api-design.md#26-lambda-ของ-v3-รวม-route-ตามฟีเจอร์) |
 | เอกสาร PDF | S3 `cookierun-uploads` + Presigned URL | ไฟล์ไม่ผ่าน Lambda ขาออก ลิงก์หมดอายุใน 300 วินาที และ Bucket ไม่เปิดสาธารณะ |
-| Audit Log | ตาราง `claims_histories` ใน RDS | บันทึกใน Transaction เดียวกับการเปลี่ยนสถานะคำขอ ตรวจย้อนหลังได้ว่าใครทำอะไรเมื่อไร ปัจจุบันบันทึกผลตรวจ (approve / reject / return), การพิมพ์เอกสาร, การรับเอกสาร, การส่งการเงิน (`cookierun-admin`) และการเปลี่ยนช่องทางยื่น (`cookierun-claimWorkflow`) |
+| Audit Log | ตาราง `claims_histories` ใน RDS | บันทึกใน Transaction เดียวกับการเปลี่ยนสถานะคำขอ ตรวจย้อนหลังได้ว่าใครทำอะไรเมื่อไร ปัจจุบันบันทึกการยื่น (`cookierun-submitClaim`), ผลตรวจ (approve / reject / return), การพิมพ์เอกสาร, การรับเอกสาร, การส่งการเงิน, การบันทึกเงินเข้า, การยกเลิกโดยเจ้าหน้าที่ (`cookierun-admin`), การเปลี่ยนช่องทางยื่น และการยกเลิกโดยผู้ขอ (`cookierun-claimWorkflow`) |
 | เข้ารหัส | AWS KMS: Customer Managed Key กับ `cookierun-uploads`, `aws/rds` กับ RDS | S3 ที่เก็บหลักฐานและ PDF ต้องมีทั้งสิทธิ์ S3 และสิทธิ์ใช้กุญแจจึงเปิดไฟล์ได้ ส่วน Bucket หน้าเว็บคง SSE-S3 เพราะไม่มีข้อมูลส่วนบุคคล ดู [`docs/security-v3.md`](docs/security-v3.md) |
 | ตรวจสอบย้อนหลัง | AWS CloudTrail (Trail `cookierun-management-trail`, Multi-region) | บันทึก Management Events รวมถึงทุกครั้งที่มีการใช้ KMS Key (`Decrypt`, `GenerateDataKey`) ตรวจย้อนหลังได้ว่าใครเปิดไฟล์เมื่อไร |
 
@@ -251,7 +251,7 @@ Base URL: `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com`
 | POST | `/claims/{id}/submit` | `cookierun-submitClaim` | ยื่นคำขอ |
 | GET | `/uploads/presigned-url` | `cookierun-getPresignedUrl` | ขอ URL สำหรับอัปโหลดเอกสาร |
 
-**Route ของ V3 (14 Route, 8 Lambda)**
+**Route ของ V3 (18 Route, 9 Lambda)**
 
 | Method | Path | Lambda | Issue | หน้าที่ |
 |---|---|---|---|---|
@@ -262,6 +262,8 @@ Base URL: `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com`
 | POST | `/claims/autofill` | `cookierun-autofillClaim` | #82 | สร้างร่างคำขอจากปฏิทิน (1 รายวิชา ต่อ 1 เดือน) |
 | PUT | `/claims/{id}/print-method` | `cookierun-claimWorkflow` | #84 | เปลี่ยนช่องทางยื่นเอกสาร |
 | GET | `/claims/{id}/actions` | `cookierun-claimWorkflow` | #84 | ประวัติการดำเนินการของคำขอ (`claims_histories`) |
+| POST | `/claims/{id}/cancel` | `cookierun-claimWorkflow` | FIX-04 | ผู้ขอยกเลิกคำขอที่ยังไม่ถูกตรวจ (`submitted` → `draft`) |
+| DELETE | `/claims/{id}` | `cookierun-deleteClaim` | FIX-05 | ลบร่างคำขอของตนเอง |
 | GET | `/claims/{id}/pdf` | `cookierun-generatePdf` | #83 | สร้าง PDF และคืน Presigned URL อายุสั้น |
 | GET | `/admin/claims` | `cookierun-admin` | #84 | รายการคำขอทั้งหมด กรอง/ค้นหาได้ พร้อมจำนวนตามสถานะ |
 | GET | `/admin/claims/{id}` | `cookierun-admin` | #84 | รายละเอียดคำขอสำหรับตรวจ |
@@ -269,8 +271,10 @@ Base URL: `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com`
 | POST | `/admin/claims/{id}/printed` | `cookierun-admin` | #84 | บันทึกว่าพิมพ์เอกสารแล้ว |
 | POST | `/admin/claims/{id}/documents-received` | `cookierun-admin` | #84 | รับเอกสารที่ลงนามแล้ว |
 | POST | `/admin/claims/send-to-finance` | `cookierun-admin` | #84 | ส่งการเงินเป็นชุด |
+| POST | `/admin/claims/mark-paid` | `cookierun-admin` | FIX-03 | บันทึกว่าเงินเข้าแล้วเป็นชุด |
+| POST | `/admin/claims/{id}/cancel` | `cookierun-admin` | FIX-04 | เจ้าหน้าที่ยกเลิกคำขอกลับเป็นร่าง (ต้องระบุหมายเหตุ) |
 
-Route `/admin/*` ใช้ได้เฉพาะกลุ่ม `admin` สถานะของคำขอเปลี่ยนตามลำดับ `draft` → `submitted` → `approved` → `documents_received` → `sent_to_finance` (หรือ `submitted` → `returned` / `rejected`) ดูรายละเอียดที่ [`backend/lambda/aws_lambda_configuration_guide.md`](backend/lambda/aws_lambda_configuration_guide.md)
+Route `/admin/*` ใช้ได้เฉพาะกลุ่ม `admin` และไม่แสดงคำขอที่เป็นร่าง สถานะของคำขอเปลี่ยนตามลำดับ `draft` → `submitted` → `approved` → `documents_received` → `sent_to_finance` → `paid` (หรือ `submitted` → `returned` / `rejected`) ผู้ขอยกเลิก `submitted` กลับเป็น `draft` ได้ ส่วนเจ้าหน้าที่ยกเลิก `submitted` / `approved` / `documents_received` กลับเป็น `draft` ได้ ดูรายละเอียดที่ [`backend/lambda/aws_lambda_configuration_guide.md`](backend/lambda/aws_lambda_configuration_guide.md)
 
 - CORS อนุญาต origin ของ CloudFront (`https://d2ye2fegyyx6ls.cloudfront.net`) และ `localhost` สำหรับพัฒนา response `401` ก็มี `access-control-allow-origin` เพื่อให้หน้าเว็บอ่านสถานะได้
 - รายละเอียด JWT Authorizer และ Access Log อยู่ที่ [`docs/api-design.md`](docs/api-design.md#25-jwt-authorizer-cognito-บน-http-api-เดิม-v3)
@@ -282,16 +286,16 @@ Route `/admin/*` ใช้ได้เฉพาะกลุ่ม `admin` สถ
 ```bash
 export API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com
 
-# ไม่มี Token: ทดสอบ CORS และ Authorizer ต้องได้ 401 (23 รายการ)
+# ไม่มี Token: ทดสอบ CORS และ Authorizer ต้องได้ 401 (26 รายการ)
 bash backend/api/tests/smoke-test.sh
 
 # ขอ Token จาก Cognito (เลือกบัญชีด้วย COGNITO_USER=... ได้)
 TOKEN=$(bash backend/api/scripts/get-token.sh)
 
-# มี Token: เพิ่มกรณีที่ต้องได้ 200 (26 รายการ)
+# มี Token: เพิ่มกรณีที่ต้องได้ 200 (29 รายการ)
 TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
 
-# มี Token และทดสอบ Route ของ V3 (48 รายการ)
+# มี Token และทดสอบ Route ของ V3 (56 รายการ)
 RUN_ROUTES=1 TOKEN="$TOKEN" bash backend/api/tests/smoke-test.sh
 ```
 
@@ -342,7 +346,7 @@ API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh    # import openapi.y
    | Layer ใน AWS | โฟลเดอร์ | ใช้กับ |
    |---|---|---|
    | `pymysql` | `pysqllayer/` | ทุก Lambda |
-   | `DBVAL34` | `DBVAL34layer/` | Lambda ของ V2 ทั้ง 8 ตัว, `admin`, `autofillClaim`, `claimWorkflow`, `deleteSchedule` |
+   | `DBVAL34` | `DBVAL34layer/` | Lambda ของ V2 ทั้ง 8 ตัว, `admin`, `autofillClaim`, `claimWorkflow`, `deleteClaim`, `deleteSchedule` |
    | `dbvalidateV3` | — (ยังไม่มีโฟลเดอร์ใน repo) | `getSchedule`, `postSchedule`, `putSchedule`, `generatePdf` |
    | `pdf-libs-py314` | `pdflayer/` | `generatePdf` |
    | `Assets` | `Asettslayer/` (ฟอนต์ Sarabun และแม่แบบ PDF) | `generatePdf` |
