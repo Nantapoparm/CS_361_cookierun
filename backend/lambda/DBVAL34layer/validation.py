@@ -60,6 +60,7 @@ STATUS_KEY_BY_NAME = {
     "returned for revision": "returned",
     "documents received": "documents_received",
     "sent to finance": "sent_to_finance",
+    "paid": "paid",
 }
 STATUS_NAME_BY_KEY = {
     "draft": "Draft",
@@ -69,6 +70,7 @@ STATUS_NAME_BY_KEY = {
     "returned": "Returned for Revision",
     "documents_received": "Documents Received",
     "sent_to_finance": "Sent to Finance",
+    "paid": "Paid",
 }
 
 # กฎรอบเบิกไม่มีตารางรองรับแล้ว: ค่าเริ่มต้นตามตัวอย่างใน Swagger
@@ -105,7 +107,7 @@ def role_key(role_name):
 
 def status_key(status_name):
     """status.statusName -> key ของ API (draft/submitted/returned/approved/rejected/
-    documents_received/sent_to_finance)"""
+    documents_received/sent_to_finance/paid)"""
     name = str(status_name or "").strip().lower()
     return STATUS_KEY_BY_NAME.get(name) or re.sub(r"\W+", "_", name)
 
@@ -347,6 +349,26 @@ def find_already_claimed_date(conn, claim_id, user_id):
         row = cur.fetchone()
     return row["workDate"] if row else None
 
+def find_already_claimed_week(conn, claim_id, user_id):
+    """ตรวจว่าวันทำงานในคำขอตกอยู่ในสัปดาห์ที่มีคำขออื่น (วิชาเดียวกัน) อยู่แล้วหรือไม่
+    (ทุกสถานะยกเว้น Draft/Rejected) -> คืนวันที่ของคำขอนี้ที่ชน หรือ None"""
+    marks = ",".join(["%s"] * len(INACTIVE_STATUS_NAMES))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT w.workDate, YEARWEEK(w.workDate, 1) AS yw
+                FROM work_information w
+                JOIN work_information o
+                  ON o.userId = w.userId AND o.offeringId = w.offeringId
+                 AND YEARWEEK(o.workDate, 1) = YEARWEEK(w.workDate, 1) AND o.claimId <> w.claimId
+                JOIN claims oc ON oc.claimId = o.claimId
+                JOIN `status` os ON os.statusId = oc.statusId
+                WHERE w.claimId = %s AND w.userId = %s
+                  AND os.statusName NOT IN ({marks})
+                ORDER BY w.workDate LIMIT 1""",
+            (claim_id, user_id, *INACTIVE_STATUS_NAMES),
+        )
+        row = cur.fetchone()
+    return row["workDate"] if row else None
 
 def term_hours_used(conn, user_id, session_id, semester, academic_year, exclude_claim_id):
     """ชั่วโมงที่ผู้ใช้เบิกไปแล้ว (คำขอที่ยื่นแล้วและไม่ถูกปฏิเสธ) ในภาค/ปี/session เดียวกัน"""
@@ -601,7 +623,10 @@ def action_stats(conn, claim_ids, with_actions=False):
 #                       │  ▲                                                    │
 #                return │  │ submit                              send_to_finance ▼
 #                       ▼  │                                              sent_to_finance
-#                     returned          submitted ──reject──▶ rejected (สิ้นสุด)
+#                     returned          submitted ──reject──▶ rejected (สิ้นสุด)   mark_paid ▼
+#                                                                                      paid
+#          ยกเลิกกลับเป็น draft: cancel (ผู้ขอ จาก submitted)
+#          admin_cancel (เจ้าหน้าที่ จาก submitted / approved / documents_received ต้องมีหมายเหตุ)
 TRANSITIONS = {
     "submit": {"from": ("draft", "returned"), "to": "submitted",
                "admin": False, "needs_note": False, "log": ACTION_SUBMITTED},
@@ -615,6 +640,12 @@ TRANSITIONS = {
                           "admin": True, "needs_note": False, "log": "documents_received"},
     "send_to_finance": {"from": ("documents_received",), "to": "sent_to_finance",
                         "admin": True, "needs_note": False, "log": "sent_to_finance"},
+    "mark_paid": {"from": ("sent_to_finance",), "to": "paid",
+                  "admin": True, "needs_note": False, "log": "paid"},
+    "cancel": {"from": ("submitted",), "to": "draft",
+               "admin": False, "needs_note": False, "log": "cancelled"},
+    "admin_cancel": {"from": ("submitted", "approved", "documents_received"), "to": "draft",
+                     "admin": True, "needs_note": True, "log": "admin_cancelled"},
 }
 
 _status_id_cache = {}
