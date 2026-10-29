@@ -4,7 +4,7 @@ info:
   description: >-
     API สำหรับระบบเบิกค่าตอบแทนการสอน (CS361 V3) ทุก Route ต้องส่ง Cognito Token ใน Header Authorization
     request / response ในไฟล์นี้ตรงกับโค้ด Lambda ที่ deploy อยู่ (backend/lambda/) ถ้าแก้ Lambda ต้องแก้ไฟล์นี้ตาม
-  version: 3.1.0
+  version: 3.2.0
 
 # ---------------------------------------------------------------
 # CORS (API Gateway HTTP API จัดการ Preflight OPTIONS ให้เอง)
@@ -179,6 +179,31 @@ paths:
         httpMethod: POST
         payloadFormatVersion: '2.0'
         uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-updateClaim/invocations
+    delete:
+      operationId: deleteClaim
+      security: [ { cognitoJwt: [] } ]
+      summary: ลบคำขอที่เป็นร่างของตนเอง
+      description: >-
+        เจ้าของคำขอเท่านั้น และสถานะต้องเป็น draft ไม่ใช่ draft ได้ 409
+        ลบ work_information และ claims_histories ของคำขอใน Transaction เดียวกัน คาบในร่างที่ลบนำไปสร้างคำขอใหม่ได้
+      responses:
+        '200':
+          description: ลบสำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data: { message: ลบร่างคำขอสำเร็จ, claimId: c003 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-deleteClaim/invocations
 
   /claims/{id}/submit:
     parameters:
@@ -192,7 +217,8 @@ paths:
       security: [ { cognitoJwt: [] } ]
       summary: ยื่นคำขอ (draft / returned → submitted) พร้อมเลือกช่องทางยื่นเอกสาร
       description: >-
-        ตรวจวันที่เบิกซ้ำกับคำขออื่น (409), เพดานชั่วโมงต่อภาค และเพดานเงินต่อวัน (400)
+        ตรวจสัปดาห์ที่เบิกซ้ำ (จันทร์–อาทิตย์ วิชาเดียวกัน) กับคำขออื่นที่ไม่ใช่ draft / rejected (409),
+        เพดานชั่วโมงต่อภาค และเพดานเงินต่อวัน (400) ของทุกบทบาทรวมถึง student_helper
         แล้วตั้ง dayClaim เป็นวันนี้ (เวลาไทย) ซึ่งใช้คำนวณ billingCycle และ deadline
       requestBody:
         required: true
@@ -669,6 +695,61 @@ paths:
         payloadFormatVersion: '2.0'
         uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-claimWorkflow/invocations
 
+  /claims/{id}/cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: รหัสคำขอ รับทั้ง "c003" และ "3"
+        schema: { type: string, example: "c003" }
+    post:
+      operationId: cancelClaim
+      security: [ { cognitoJwt: [] } ]
+      summary: ผู้ขอยกเลิกคำขอของตนเองที่เจ้าหน้าที่ยังไม่ได้ตรวจ submitted → draft
+      description: >-
+        เจ้าของคำขอเท่านั้น และสถานะต้องเป็น submitted สถานะอื่นได้ 409
+        บันทึกใน claims_histories ด้วย action cancelled
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500, description: เหตุผลที่ยกเลิก (ไม่บังคับ) }
+            example:
+              reason: กรอกเวลาผิด จะแก้แล้วยื่นใหม่
+      responses:
+        '200':
+          description: ยกเลิกสำเร็จ คำขอกลับเป็นร่าง
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      claimId: { type: string, example: c003 }
+                      from: { $ref: '#/components/schemas/ClaimStatus' }
+                      to: { $ref: '#/components/schemas/ClaimStatus' }
+              example:
+                success: true
+                data: { message: ยกเลิกคำขอสำเร็จ คำขอกลับเป็นร่าง, claimId: c003, from: submitted, to: draft }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-claimWorkflow/invocations
+
   # ----- PDF #83 -----
   /claims/{id}/pdf:
     parameters:
@@ -718,7 +799,9 @@ paths:
       operationId: adminListClaims
       security: [ { cognitoJwt: [] } ]
       summary: รายการคำขอทั้งหมด กรองและค้นหาได้ พร้อมจำนวนตามสถานะ (AD1, AD2)
-      description: counts นับตามเดือน (month) อย่างเดียว ไม่ได้กรองตามเงื่อนไขอื่น
+      description: >-
+        ไม่รวมคำขอสถานะ draft ทั้งใน items และ counts (status=draft ได้รายการว่าง)
+        counts นับตามเดือน (month) อย่างเดียว ไม่ได้กรองตามเงื่อนไขอื่น
       parameters:
         - { name: role, in: query, schema: { type: string, enum: [instructor, ta, student_helper] } }
         - { name: status, in: query, schema: { $ref: '#/components/schemas/ClaimStatus' } }
@@ -897,6 +980,52 @@ paths:
         payloadFormatVersion: '2.0'
         uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
 
+  /admin/claims/{id}/cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: รหัสคำขอ รับทั้ง "c003" และ "3"
+        schema: { type: string, example: "c003" }
+    post:
+      operationId: adminCancelClaim
+      security: [ { cognitoJwt: [] } ]
+      summary: เจ้าหน้าที่ยกเลิกคำขอ submitted / approved / documents_received → draft
+      description: >-
+        ต้องระบุหมายเหตุ (ไม่ส่งได้ 400) สถานะอื่นได้ 409 บันทึกใน claims_histories ด้วย action admin_cancelled
+        คำขอที่กลับเป็นร่างจะไม่แสดงใน GET /admin/claims อีก
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, maxLength: 500, description: เหตุผลที่ยกเลิก }
+            example:
+              note: ผู้ขอแจ้งว่ายื่นผิดวิชา
+      responses:
+        '200':
+          description: ยกเลิกสำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransitionResponse' }
+              example:
+                success: true
+                data: { message: เปลี่ยนสถานะสำเร็จเป็น draft, from: approved, to: draft }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
   /admin/claims/send-to-finance:
     post:
       operationId: adminSendToFinance
@@ -928,6 +1057,49 @@ paths:
                 data:
                   message: ส่งการเงินสำเร็จจำนวน 3 รายการ
                   updatedClaims: [c001, c002, c007]
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+      x-amazon-apigateway-integration:
+        type: AWS_PROXY
+        httpMethod: POST
+        payloadFormatVersion: '2.0'
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:ACCOUNT_ID:function:cookierun-admin/invocations
+
+  /admin/claims/mark-paid:
+    post:
+      operationId: adminMarkPaid
+      security: [ { cognitoJwt: [] } ]
+      summary: บันทึกว่าเงินเข้าแล้วเป็นชุด sent_to_finance → paid
+      description: ทำทั้งชุดใน Transaction เดียว ถ้าคำขอใดไม่พบหรือสถานะไม่ใช่ sent_to_finance จะไม่มีคำขอใดถูกเปลี่ยน
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [claimIds]
+              properties:
+                claimIds:
+                  type: array
+                  minItems: 1
+                  description: รหัสคำขอ รับทั้ง "c003" และ 3
+                  items: { oneOf: [ { type: string }, { type: integer } ] }
+            example:
+              claimIds: [c001, c002]
+      responses:
+        '200':
+          description: เปลี่ยนสถานะทุกคำขอในชุดสำเร็จ
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  message: บันทึกเงินเข้าสำเร็จจำนวน 2 รายการ
+                  updatedClaims: [c001, c002]
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1012,7 +1184,7 @@ components:
   schemas:
     ClaimStatus:
       type: string
-      enum: [draft, submitted, returned, approved, rejected, documents_received, sent_to_finance]
+      enum: [draft, submitted, returned, approved, rejected, documents_received, sent_to_finance, paid]
     PrintMethod:
       type: string
       enum: [sign_with_staff, self_print]
@@ -1155,7 +1327,7 @@ components:
     ClaimAction:
       type: object
       properties:
-        action: { type: string, example: submitted, description: "submitted, approved, rejected, returned, documents_received, sent_to_finance, printed, print_method_changed" }
+        action: { type: string, example: submitted, description: "submitted, approved, rejected, returned, documents_received, sent_to_finance, paid, cancelled, admin_cancelled, printed, print_method_changed" }
         fromStatus: { allOf: [ { $ref: '#/components/schemas/ClaimStatus' } ], nullable: true }
         toStatus: { allOf: [ { $ref: '#/components/schemas/ClaimStatus' } ], nullable: true }
         actor: { type: string }

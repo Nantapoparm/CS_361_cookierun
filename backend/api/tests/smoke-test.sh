@@ -67,8 +67,9 @@ MAXAGE=$(header_of access-control-max-age)
   || fail "max-age ควรเป็น 3600 (ได้ '$MAXAGE')"
 
 # 2) preflight ของ route ที่ใช้ method ต่างกัน
-for spec in "/claims:POST" "/claims/c001:PUT" "/claims/c001/submit:POST" "/terms:GET" \
-            "/schedule/1:DELETE" "/schedule:GET" "/admin/claims:GET"; do
+for spec in "/claims:POST" "/claims/c001:PUT" "/claims/c001:DELETE" "/claims/c001/submit:POST" \
+            "/claims/c001/cancel:POST" "/terms:GET" "/schedule/1:DELETE" "/schedule:GET" \
+            "/admin/claims:GET" "/admin/claims/mark-paid:POST"; do
   p="${spec%%:*}"; m="${spec##*:}"
   preflight "$p" "$ORIGIN" "$m" "content-type,authorization"
   if [ "$(status_of)" = "204" ] && [ "$(header_of access-control-allow-origin)" = "$ORIGIN" ]; then
@@ -147,9 +148,9 @@ g = json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4))).get("cognito:g
 g = g if isinstance(g, list) else str(g).strip("[]").split()
 print(1 if "admin" in g else 0)' 2>/dev/null || echo 0)
   if [ "$IS_ADMIN" = "1" ]; then
-    echo "(token เป็นกลุ่ม admin)"; OTHER_USER=200; ADMIN_LIST=200; ADMIN_ONE=404
+    echo "(token เป็นกลุ่ม admin)"; OTHER_USER=200; ADMIN_LIST=200; ADMIN_ONE=404; ADMIN_BAD=400
   else
-    echo "(token ไม่ใช่กลุ่ม admin)"; OTHER_USER=403; ADMIN_LIST=403; ADMIN_ONE=403
+    echo "(token ไม่ใช่กลุ่ม admin)"; OTHER_USER=403; ADMIN_LIST=403; ADMIN_ONE=403; ADMIN_BAD=403
   fi
 
   # check <ชื่อ> <status ที่คาดหวัง> <curl args...>
@@ -176,6 +177,8 @@ print(1 if "admin" in g else 0)' 2>/dev/null || echo 0)
   check "submit ไม่พบ"                          404 -X POST "$API_URL/claims/not-exist/submit" -H "$JSON" -d '{"printMethod":"sign_with_staff"}'
   check "print-method ไม่พบ"                    404 -X PUT "$API_URL/claims/not-exist/print-method" -H "$JSON" -d '{"printMethod":"self_print"}'
   check "GET /claims/{id}/actions ไม่พบ"         404 "$API_URL/claims/not-exist/actions"
+  check "cancel ไม่พบ"                          404 -X POST "$API_URL/claims/not-exist/cancel" -H "$JSON" -d '{}'
+  check "DELETE /claims/{id} ไม่พบ"              404 -X DELETE "$API_URL/claims/not-exist"
   check "GET /claims/{id}/pdf ไม่พบ"             404 "$API_URL/claims/not-exist/pdf"
   check "POST /claims/autofill body ว่าง"        400 -X POST "$API_URL/claims/autofill" -H "$JSON" -d '{}'
 
@@ -188,6 +191,10 @@ print(1 if "admin" in g else 0)' 2>/dev/null || echo 0)
   # เจ้าหน้าที่
   check "GET /admin/claims"                    "$ADMIN_LIST" "$API_URL/admin/claims"
   check "GET /admin/claims/{id}"               "$ADMIN_ONE" "$API_URL/admin/claims/not-exist"
+  check "admin cancel ไม่พบ"                     "$ADMIN_ONE" -X POST "$API_URL/admin/claims/not-exist/cancel" -H "$JSON" -d '{"note":"smoke"}'
+  # Lambda ตรวจ note ก่อนโหลดคำขอ จึงได้ 400 โดยไม่แตะข้อมูล
+  check "admin cancel ไม่มี note"                 "$ADMIN_BAD" -X POST "$API_URL/admin/claims/c999999/cancel" -H "$JSON" -d '{}'
+  check "mark-paid body ว่าง"                    "$ADMIN_BAD" -X POST "$API_URL/admin/claims/mark-paid" -H "$JSON" -d '{}'
 else
   echo "(ข้ามการทดสอบ route: ตั้ง RUN_ROUTES=1 เมื่อผูก Lambda แล้ว)"
 fi
