@@ -34,16 +34,21 @@
 | POST | `/claims/autofill` | ร่างรายการงานจากปฏิทิน (ยังไม่สร้างคำขอ หน้าเว็บสร้างต่อด้วย `POST /claims`) | `cookierun-autofillClaim` | 200, 400, 404 |
 | PUT | `/claims/{id}/print-method` | เปลี่ยนช่องทางยื่น | `cookierun-claimWorkflow` | 200, 400, 404 |
 | GET | `/claims/{id}/actions` | ประวัติการดำเนินการของคำขอ (`claims_histories`) | `cookierun-claimWorkflow` | 200, 404 |
+| POST | `/claims/{id}/cancel` | ผู้ขอยกเลิกคำขอ `submitted` → `draft` (`reason` ไม่บังคับ) | `cookierun-claimWorkflow` | 200, 400, 404, 409 |
+| DELETE | `/claims/{id}` | ลบร่างของตนเอง พร้อม `work_information` และ `claims_histories` ของคำขอ | `cookierun-deleteClaim` | 200, 404, 409 |
 | GET | `/claims/{id}/pdf?type=claim\|blank` | สร้าง PDF คืน Presigned URL (ก่อนอนุมัติได้ฉบับตัวอย่าง) | `cookierun-generatePdf` | 200, 400, 404, 409 |
-| GET | `/admin/claims?role=&status=&month=&offeringId=&printMethod=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ | `cookierun-admin` | 200, 400 |
+| GET | `/admin/claims?role=&status=&month=&offeringId=&printMethod=&q=` | รายการคำขอทั้งหมด + จำนวนตามสถานะ (ไม่รวมร่าง) | `cookierun-admin` | 200, 400 |
 | GET | `/admin/claims/{id}` | รายละเอียดสำหรับตรวจ พร้อมประวัติ | `cookierun-admin` | 200, 404 |
 | POST | `/admin/claims/{id}/review` | approve / reject / return | `cookierun-admin` | 200, 400, 404, 409 |
 | POST | `/admin/claims/{id}/printed` | บันทึกว่าเจ้าหน้าที่พิมพ์แล้ว | `cookierun-admin` | 200, 404, 409 |
 | POST | `/admin/claims/{id}/documents-received` | รับเอกสารที่เซ็นแล้ว | `cookierun-admin` | 200, 404, 409 |
 | POST | `/admin/claims/send-to-finance` | ส่งการเงินเป็นชุด | `cookierun-admin` | 200, 400, 404, 409 |
+| POST | `/admin/claims/mark-paid` | บันทึกเงินเข้าเป็นชุด `sent_to_finance` → `paid` | `cookierun-admin` | 200, 400, 404, 409 |
+| POST | `/admin/claims/{id}/cancel` | ยกเลิก `submitted` / `approved` / `documents_received` → `draft` (`note` บังคับ) | `cookierun-admin` | 200, 400, 404, 409 |
 
-- Lambda ของ V3 ส่วนใหญ่รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย path และ method ยกเว้นปฏิทินคาบสอน (`/schedule`) ที่แยก Lambda ต่อ method
-- `ClaimStatus` ของ V3: `draft`, `submitted`, `returned`, `approved`, `rejected`, `documents_received`, `sent_to_finance`
+- Lambda ของ V3 ส่วนใหญ่รวมหลาย Route ไว้ในฟังก์ชันเดียวตามฟีเจอร์ แล้วแยกการทำงานด้วย path และ method ยกเว้นปฏิทินคาบสอน (`/schedule`) ที่แยก Lambda ต่อ method และการลบร่าง (`cookierun-deleteClaim`)
+- `ClaimStatus` ของ V3: `draft`, `submitted`, `returned`, `approved`, `rejected`, `documents_received`, `sent_to_finance`, `paid`
+- `POST /claims/{id}/submit` ได้ `409` เมื่อมีคาบในสัปดาห์เดียวกัน (จันทร์–อาทิตย์) และวิชาเดียวกันอยู่ในคำขออื่นที่ไม่ใช่ `draft` / `rejected` แล้ว
 - ไม่มี Route `/work-days` และ `/current-period`: วันทำงานของนักศึกษาช่วยงานใช้ `/schedule` ร่วมกับอาจารย์ / TA และหน้าเว็บคำนวณรอบการเบิกปัจจุบันจากวันที่เอง
 
 *(ตัวอย่าง Request/Response ของทุก Route สามารถดูได้ในไฟล์ `openapi.yaml` ฟิลด์ `example`)*
@@ -131,9 +136,9 @@
 
 ### 2.6 Lambda ของ V3 รวม Route ตามฟีเจอร์
 
-- **Requirement:** V3 เพิ่ม 14 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
-- **Decision:** Route ใหม่ใช้ Lambda 8 ฟังก์ชัน ส่วนใหญ่รวมตามฟีเจอร์ (`autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย path และ method ส่วนปฏิทินคาบสอนแยกต่อ method (`getSchedule`, `postSchedule`, `putSchedule`, `deleteSchedule`) ตามที่เจ้าของ Lambda เลือก Route ของ V2 คง Lambda เดิม
-- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (8 แทน 14) สิ่งที่แลกคือต้องเขียน routing ในโค้ด ส่วนสิทธิ์ IAM ปัจจุบันทุก Lambda ใช้ Role `cookierun-lambda-role` ร่วมกัน
+- **Requirement:** V3 เพิ่ม 18 Route Lambda deploy ด้วยมือ และทุกตัวต้องอัปเดต Layer เป็นเวอร์ชันเดียวกัน
+- **Decision:** Route ใหม่ใช้ Lambda 9 ฟังก์ชัน ส่วนใหญ่รวมตามฟีเจอร์ (`autofillClaim`, `claimWorkflow`, `generatePdf`, `admin`) และแยกการทำงานด้วย path และ method ส่วนปฏิทินคาบสอนแยกต่อ method (`getSchedule`, `postSchedule`, `putSchedule`, `deleteSchedule`) และการลบร่างแยกเป็น `deleteClaim` ตามที่เจ้าของ Lambda เลือก Route ของ V2 คง Lambda เดิม
+- **Trade-off:** ได้จำนวน Lambda ที่ต้อง deploy และอัปเดต Layer น้อยลง (9 แทน 18) สิ่งที่แลกคือต้องเขียน routing ในโค้ด ส่วนสิทธิ์ IAM ปัจจุบันทุก Lambda ใช้ Role `cookierun-lambda-role` ร่วมกัน
 
 ## 3. Stage และ Access Log (V2)
 
