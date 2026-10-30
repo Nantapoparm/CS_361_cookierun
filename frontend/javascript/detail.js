@@ -39,11 +39,11 @@ function nextBox(resubmitted) {
   const counter = `ห้อง ${esc(OFFICE.room)} · ${esc(OFFICE.hours)}`;
   switch (c.status) {
     case 'draft':
-      return alertHtml('warn', '<b>ยังไม่ได้ยื่น</b> — ร่างนี้ยังไม่ถึงเจ้าหน้าที่ ตรวจตัวอย่าง PDF แล้วเลือกช่องทางยื่น',
+      return alertHtml('warn', `<b>ยังไม่ได้ยื่น</b> — ร่างนี้ยังไม่ถึงเจ้าหน้าที่ ${student() ? 'ตรวจข้อมูลแล้วกดยื่น' : 'ตรวจตัวอย่าง PDF แล้วเลือกช่องทางยื่น'}`,
         `<a class="btn sm" href="submit.html?id=${encodeURIComponent(c.claimId)}">ไปยื่นคำขอ</a>`);
     case 'submitted': {
       const again = resubmitted || (c.revision || 0) > 1;
-      const sw = c.printMethod === 'self_print'
+      const sw = c.printMethod === 'self_print' && !student()
         ? ' · เปลี่ยนใจ? <button type="button" class="link-btn" id="switch">เปลี่ยนเป็นไปเซ็นที่เคาน์เตอร์</button> ได้จนกว่าจะตรวจเสร็จ' : '';
       return again
         ? alertHtml('info', `<b>ยื่นใหม่แล้ว (ครั้งที่ ${c.revision || 2})</b> — เจ้าหน้าที่จะเห็นรายการที่แก้ไขไฮไลต์ไว้ให้ตรวจ${sw}`)
@@ -62,6 +62,10 @@ function nextBox(resubmitted) {
       return alertHtml('danger', `<b>ไม่อนุมัติ</b>${a ? ` <span class="muted">· ${esc(a.actor)} · ${esc(thDateTime(a.createdAt))}</span>` : ''}<br>“${esc(a?.note || c.returnNote || '-')}” · สร้างคำขอใหม่ของวิชาและเดือนนี้ได้`);
     }
     case 'approved':
+      if (student()) {
+        return alertHtml('success', `<b>เจ้าหน้าที่ตรวจผ่านแล้ว — นำส่งแบบฟอร์มที่กรอกแล้ว</b><br>กรอกแบบฟอร์มเปล่าด้วยลายมือ ให้ผู้ควบคุมงานเซ็นรับรอง แล้วนำส่ง${counter} ภายใน <b>${esc(due)}</b> แจ้งเลขที่คำขอ <b>#${id}</b>`,
+          '<button type="button" class="btn sm" data-dl>ดาวน์โหลดแบบฟอร์มเปล่า</button>');
+      }
       return c.printMethod === 'self_print'
         ? alertHtml('success', `<b>เจ้าหน้าที่ตรวจผ่านแล้ว — ดาวน์โหลดไปปริ้นและเซ็นได้เลย</b><br>1) พิมพ์ A4 หน้าเดียว · 2) เซ็นปากกาน้ำเงินทุกแถว · 3) นำส่ง${counter} ภายใน <b>${esc(due)}</b> แจ้งเลขที่คำขอ <b>#${id}</b>
             <br><small>ถ้าต้องแก้ข้อมูลหลังตรวจผ่าน ต้องส่งตรวจใหม่ · ปริ้นจากปุ่มนี้เท่านั้น (ฉบับที่ตรวจแล้ว)</small>`,

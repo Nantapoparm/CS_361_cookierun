@@ -11,8 +11,8 @@ const NAV_REQUESTER = [
   { href: 'form.html', text: 'สร้างคำขอ', match: ['form.html', 'submit.html'] },
   { href: 'dashboard.html', text: 'ประวัติคำขอ', match: ['dashboard.html', 'detail.html'] }
 ];
-// นักศึกษาช่วยงานมี 2 เมนูตาม Figma S1/S2 (สร้างคำขอจากปุ่มในภาพรวม/ปฏิทิน และดูคำขอจากภาพรวม)
-const NAV_STUDENT = NAV_REQUESTER.slice(0, 2);
+// นักศึกษาช่วยงานมีเมนูเท่าผู้ขอเบิกอื่น (เดิม Figma S1/S2 มี 2 เมนู แต่ผู้ใช้หาทางยื่นและประวัติคำขอไม่เจอ)
+const NAV_STUDENT = NAV_REQUESTER;
 const NAV_ADMIN = [
   { href: 'admin.html', text: 'ภาพรวม', match: ['admin.html'] },
   { href: 'admin-claims.html', text: 'คำขอทั้งหมด', match: ['admin-claims.html', 'admin-review.html'] },
