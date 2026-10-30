@@ -10,6 +10,7 @@ from db import run_auth, ok, parse_json_body, ApiError
 from validation import (
     ACTION_PRINTED,
     STATUS_NAME_BY_KEY,
+    STATUS_DRAFT,
     action_stats,
     apply_transition,
     build_claims,
@@ -45,16 +46,29 @@ def _route_admin(conn, auth, event):
         or ""
     ).upper()
 
+    # FIX-03: POST /admin/claims/mark-paid
+    if method == "POST" and path.endswith("/admin/claims/mark-paid"):
+        return _admin_mark_paid(conn, auth, event)
+
     if method == "POST" and path.endswith("/admin/claims/send-to-finance"):
         return _admin_send_to_finance(conn, auth, event)
+
     if method == "GET" and path.endswith("/admin/claims"):
         return _admin_list_claims(conn, auth, event)
+
     if method == "POST" and path.endswith("/review"):
         return _admin_review_claim(conn, auth, event)
+
     if method == "POST" and path.endswith("/printed"):
         return _admin_mark_printed(conn, auth, event)
+
     if method == "POST" and path.endswith("/documents-received"):
         return _admin_documents_received(conn, auth, event)
+
+    # FIX-04: POST /admin/claims/{id}/cancel
+    if method == "POST" and path.endswith("/cancel"):
+        return _admin_cancel_claim(conn, auth, event)
+
     # GET /admin/claims/{id} (ไม่รวม path ย่อยอื่น)
     if method == "GET" and re.search(r"/admin/claims/[^/]+$", path):
         return _admin_get_claim(conn, auth, event)
@@ -73,7 +87,7 @@ def _month_range(value):
 
 # ---------------------------------------------------------------- Handlers
 def _admin_list_claims(conn, auth, event):
-    """GET /admin/claims: รายการคำขอ + counts ตามสถานะ"""
+    """GET /admin/claims: รายการคำขอ + counts ตามสถานะ (ไม่รวม Draft)"""
     params = event.get("queryStringParameters") or {}
     role_filter = (params.get("role") or "").strip().lower()
     status_param = (params.get("status") or "").strip().lower()
@@ -82,7 +96,9 @@ def _admin_list_claims(conn, auth, event):
     print_method_filter = params.get("printMethod")
     search_q = (params.get("q") or "").strip()
 
-    # เงื่อนไขเดือน ใช้ทั้ง counts และรายการ เพื่อให้ตัวเลขตรงกัน
+    # FIX-04: กรอง Draft ออกเสมอฝั่งเจ้าหน้าที่
+    draft_exclude_sql = f"c.statusId <> {STATUS_DRAFT}"
+
     month_sql, month_args = "", []
     if month_filter:
         start, end = _month_range(month_filter)
@@ -92,22 +108,27 @@ def _admin_list_claims(conn, auth, event):
         )
         month_args = [start, end]
 
-    # 1) counts
+    # 1) counts (ไม่นับ Draft)
+    counts_where = [draft_exclude_sql]
+    counts_args = []
+    if month_sql:
+        counts_where.append(month_sql)
+        counts_args.extend(month_args)
+
     counts_sql = (
         "SELECT s.statusName, COUNT(c.claimId) AS cnt "
-        "FROM claims c JOIN `status` s ON s.statusId = c.statusId"
+        "FROM claims c JOIN `status` s ON s.statusId = c.statusId "
+        f"WHERE {' AND '.join(counts_where)} "
+        "GROUP BY s.statusName"
     )
-    if month_sql:
-        counts_sql += " WHERE " + month_sql
-    counts_sql += " GROUP BY s.statusName"
     counts = {}
     with conn.cursor() as cur:
-        cur.execute(counts_sql, month_args)
+        cur.execute(counts_sql, counts_args)
         for r in cur.fetchall():
             counts[status_key(r["statusName"])] = int(r["cnt"])
 
-    # 2) รายการ
-    where, args = ["1=1"], []
+    # 2) รายการคำขอ (ไม่ดึง Draft)
+    where, args = [draft_exclude_sql], []
     if month_sql:
         where.append(month_sql)
         args.extend(month_args)
@@ -154,7 +175,7 @@ def _admin_list_claims(conn, auth, event):
 
     items = build_claims(conn, claim_ids)
 
-    # 3) role / printMethod กรองหลัง build (ค่า derive จาก roleName / env)
+    # 3) role / printMethod กรองหลัง build
     if role_filter:
         items = [c for c in items if str(c.get("role") or "").lower() == role_filter]
     if print_method_filter:
@@ -166,14 +187,13 @@ def _admin_list_claims(conn, auth, event):
 def _admin_get_claim(conn, auth, event):
     claim_id = path_claim_id(event)
     load_claim_any(conn, claim_id)  # ไม่พบ = 404
-    claims = build_claims(conn, [claim_id], with_actions=True)  # with_actions = timeline ประวัติ
+    claims = build_claims(conn, [claim_id], with_actions=True)
     if not claims:
         raise ApiError(404, "ไม่พบคำขอ")
     return ok(200, claims[0])
 
 
 def _parse_review_work_ids(conn, claim_id, raw):
-    """workIds (แถวงานที่ถูกตีกลับ) -> list[int] ตรวจว่าอยู่ในคำขอนี้จริง; ไม่ส่ง = None"""
     if raw is None or raw == []:
         return None
     if not isinstance(raw, list):
@@ -221,7 +241,6 @@ def _admin_review_claim(conn, auth, event):
 def _admin_mark_printed(conn, auth, event):
     claim_id = path_claim_id(event)
     claim = load_claim_any(conn, claim_id)
-    # AD5: พิมพ์ซ้ำไม่ได้ (เช็กได้เมื่อเปิด CLAIM_ACTIONS_ENABLED=1 เท่านั้น)
     if (action_stats(conn, [claim_id]).get(claim_id) or {}).get("printedAt"):
         raise ApiError(409, "คำขอนี้ถูกบันทึกว่าพิมพ์แล้ว")
     log_action(
@@ -249,8 +268,8 @@ def _admin_send_to_finance(conn, auth, event):
     if not raw_ids or not isinstance(raw_ids, list):
         raise ApiError(400, "claimIds ต้องเป็น array ของรหัสคำขอ")
 
-    claim_ids = list(dict.fromkeys(parse_claim_id(c) for c in raw_ids))  # ตัดซ้ำ คงลำดับ
-    for cid in claim_ids:  # พังกลางคัน -> run_auth rollback ทั้งชุด
+    claim_ids = list(dict.fromkeys(parse_claim_id(c) for c in raw_ids))
+    for cid in claim_ids:
         apply_transition(
             conn, claim_id=cid, action="send_to_finance",
             actor_user_id=auth["userId"], actor_is_admin=True,
@@ -260,3 +279,41 @@ def _admin_send_to_finance(conn, auth, event):
         "message": f"ส่งการเงินสำเร็จจำนวน {len(claim_ids)} รายการ",
         "updatedClaims": [f"c{cid:03d}" for cid in claim_ids],
     })
+
+
+# FIX-03: POST /admin/claims/mark-paid
+def _admin_mark_paid(conn, auth, event):
+    body = parse_json_body(event)
+    raw_ids = body.get("claimIds")
+    if not raw_ids or not isinstance(raw_ids, list):
+        raise ApiError(400, "claimIds ต้องเป็น array ของรหัสคำขอ")
+
+    claim_ids = list(dict.fromkeys(parse_claim_id(c) for c in raw_ids))
+    for cid in claim_ids:
+        apply_transition(
+            conn, claim_id=cid, action="mark_paid",
+            actor_user_id=auth["userId"], actor_is_admin=True,
+        )
+    conn.commit()
+    return ok(200, {
+        "message": f"บันทึกเงินเข้าสำเร็จจำนวน {len(claim_ids)} รายการ",
+        "updatedClaims": [f"c{cid:03d}" for cid in claim_ids],
+    })
+
+
+# FIX-04: POST /admin/claims/{id}/cancel
+def _admin_cancel_claim(conn, auth, event):
+    claim_id = path_claim_id(event)
+    body = parse_json_body(event)
+    note = body.get("note")
+
+    if not note or not isinstance(note, str) or not note.strip():
+        raise ApiError(400, "ต้องระบุหมายเหตุการยกเลิก")
+
+    result = apply_transition(
+        conn, claim_id=claim_id, action="admin_cancel",
+        actor_user_id=auth["userId"], actor_is_admin=True,
+        note=note.strip(),
+    )
+    conn.commit()
+    return ok(200, {"message": f"เปลี่ยนสถานะสำเร็จเป็น {result['to']}", **result})

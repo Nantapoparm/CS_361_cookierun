@@ -1,13 +1,12 @@
 """
 POST /claims/{id}/submit
 ยื่นคำขอ: draft / returned -> submitted
-ผู้รับผิดชอบ: คนที่ 3 (V3-10 / V3-84)
 
 ความเปลี่ยนแปลงสำหรับ V3:
-  - ใช้ run_auth ระบุตัวตนผู้ใช้จาก Cognito JWT Token แทน Header X-User-Id
+  - ใช้ run_auth ระบุตัวตนผู้ใช้จาก Cognito JWT Token
   - รับค่า printMethod (sign_with_staff / self_print) บันทึกลง claims.printStatus
-  - เปลี่ยนสถานะผ่าน apply_transition() เพื่อลง Audit Log ใน claim_actions
-  - ตรวจสอบกฎธุรกิจครบถ้วน (วันเบิกซ้ำ, เพดานชั่วโมง/เงิน)
+  - เปลี่ยนสถานะผ่าน apply_transition() เพื่อลง Audit Log ใน claims_histories
+  - ตรวจสอบกฎธุรกิจครบถ้วน (FIX-02: ตรวจสัปดาห์ซ้ำ, FIX-01: เพดานชั่วโมง/เงินของทุกบทบาทรวมถึง student_helper)
 """
 from decimal import Decimal
 from db import run_auth, ok, parse_json_body, ApiError
@@ -18,7 +17,7 @@ from validation import (
     get_offering,
     get_rate,
     get_rule,
-    find_already_claimed_date,
+    find_already_claimed_week,  # FIX-02: ใช้ตรวจสัปดาห์ซ้ำ
     term_hours_used,
     parse_print_method,
     print_status_id,
@@ -60,15 +59,15 @@ def _submit(conn, auth, event):
     offering_id = offering_rows[0]["offeringId"]
     session_id = offering_rows[0]["sessionId"]
 
-    # 4. ตรวจสอบว่ามีการเบิกซ้ำวันและวิชาเดียวกันในคำขออื่นหรือไม่
-    duplicate_date = find_already_claimed_date(conn, claim_id, user_id)
-    if duplicate_date:
+    # 4. FIX-02: ตรวจสอบว่ามีการเบิกซ้ำสัปดาห์และวิชาเดียวกันในคำขออื่นหรือไม่
+    duplicate_week_date = find_already_claimed_week(conn, claim_id, user_id)
+    if duplicate_week_date:
         raise ApiError(
             409,
-            f"วันที่ {duplicate_date} ในวิชานี้เคยถูกยื่นเบิกไปแล้วในคำขออื่น",
+            f"สัปดาห์ของวันที่ {duplicate_week_date} ในวิชานี้เคยถูกยื่นเบิกไปแล้วในคำขออื่น",
         )
 
-    # 5. ตรวจสอบอัตราค่าตอบแทนและกฎเพดานชั่วโมง/เงิน
+    # 5. FIX-01: ตรวจสอบอัตราค่าตอบแทนและกฎเพดานชั่วโมง/เงิน (รองรับอาจารย์, TA, และ student_helper)
     offering = get_offering(conn, offering_id)
     role_id = user["roleId"]
 
@@ -79,8 +78,8 @@ def _submit(conn, auth, event):
     rate_per_hour = Decimal(str(rate_row["compensationPerHour"]))
 
     rule_row = get_rule(conn, session_id, role_id)
-    max_hours = Decimal(str(rule_row["maxHoursPerTerm"])) if rule_row and rule_row["maxHoursPerTerm"] else None
-    max_amount_per_day = Decimal(str(rule_row["maxAmountPerDay"])) if rule_row and rule_row["maxAmountPerDay"] else None
+    max_hours = Decimal(str(rule_row["maxHoursPerTerm"])) if rule_row and rule_row.get("maxHoursPerTerm") else None
+    max_amount_per_day = Decimal(str(rule_row["maxAmountPerDay"])) if rule_row and rule_row.get("maxAmountPerDay") else None
 
     # 6. คำนวณชั่วโมงและยอดเงินในคำขอนี้
     with conn.cursor() as cur:
