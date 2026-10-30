@@ -17,6 +17,7 @@ const GROUPS = [
   { key: 'self', th: 'ปริ้นเซ็นเอง', test: (c) => c.status === 'approved' && c.printMethod === 'self_print' },
   { key: 'documents_received', th: 'รับเอกสารแล้ว', test: (c) => c.status === 'documents_received', opt: true },
   { key: 'sent_to_finance', th: 'ส่งการเงินแล้ว', test: (c) => c.status === 'sent_to_finance' },
+  { key: 'paid', th: 'เงินเข้าแล้ว', test: (c) => c.status === 'paid', opt: true },
   { key: 'rejected', th: 'ไม่อนุมัติ', test: (c) => c.status === 'rejected', opt: true }
 ];
 const groupOf = (k) => GROUPS.find((g) => g.key === k);

@@ -2,7 +2,7 @@
 // ต้องโหลดหลัง core.js (ใช้ esc) และก่อน api.js / ไฟล์ของแต่ละหน้า
 
 /* ---------- สถานะคำขอ (ชุดเดียวทั้งระบบ) ----------
-   key ตาม API (V3-10): draft, submitted, returned, approved, rejected, documents_received, sent_to_finance
+   key ตาม API (V3-10): draft, submitted, returned, approved, rejected, documents_received, sent_to_finance, paid (FIX-03)
    approved แสดงต่างกันตามช่องทางยื่น printMethod: sign_with_staff / self_print */
 const CLAIM_STATUS = {
   draft:              { th: 'ร่าง', cls: 'draft' },
@@ -11,7 +11,8 @@ const CLAIM_STATUS = {
   approved:           { th: 'ตรวจผ่าน · รอเซ็นเอกสาร', cls: 'sign' },
   rejected:           { th: 'ไม่อนุมัติ', cls: 'rej' },
   documents_received: { th: 'รับเอกสารแล้ว · รอส่งการเงิน', cls: 'recv' },
-  sent_to_finance:    { th: 'ส่งการเงินแล้ว', cls: 'done' }
+  sent_to_finance:    { th: 'ส่งการเงินแล้ว · รอเงินเข้า', cls: 'done' },
+  paid:               { th: 'เงินเข้าเรียบร้อยแล้ว', cls: 'paid' }
 };
 const APPROVED_SELF = { th: 'ตรวจผ่าน · ปริ้นเซ็นเอง', cls: 'self' };
 
@@ -58,18 +59,18 @@ function blankFormsHtml() {
 }
 
 /* ---------- Stepper ----------
-   sign_with_staff (5 ขั้น): ร่าง → ยื่น → ตรวจ → เซ็นเอกสาร → ส่งการเงิน
-   self_print (6 ขั้น): ร่าง → ส่งตรวจ → ตรวจ → ปริ้น + เซ็น → นำส่งเอกสาร → ส่งการเงิน
+   sign_with_staff (6 ขั้น): ร่าง → ยื่น → ตรวจ → เซ็นเอกสาร → ส่งการเงิน → เงินเข้า
+   self_print (7 ขั้น): ร่าง → ส่งตรวจ → ตรวจ → ปริ้น + เซ็น → นำส่งเอกสาร → ส่งการเงิน → เงินเข้า
    returned / rejected หยุดที่ขั้นเจ้าหน้าที่ตรวจ (สีแดง) */
 function stepperHtml(status, printMethod) {
   const self = printMethod === 'self_print';
   const labels = self
-    ? ['ร่างคำขอ', 'ส่งตรวจ', 'เจ้าหน้าที่ตรวจ', 'ปริ้น + เซ็น', 'นำส่งเอกสาร', 'ส่งการเงิน']
-    : ['ร่างคำขอ', 'ยื่นคำขอ', 'เจ้าหน้าที่ตรวจ', 'เซ็นเอกสาร', 'ส่งการเงิน'];
+    ? ['ร่างคำขอ', 'ส่งตรวจ', 'เจ้าหน้าที่ตรวจ', 'ปริ้น + เซ็น', 'นำส่งเอกสาร', 'ส่งการเงิน', 'เงินเข้า']
+    : ['ร่างคำขอ', 'ยื่นคำขอ', 'เจ้าหน้าที่ตรวจ', 'เซ็นเอกสาร', 'ส่งการเงิน', 'เงินเข้า'];
   // ขั้นที่กำลังทำอยู่ (index) ของแต่ละสถานะ
   const now = (self
-    ? { draft: 0, submitted: 2, returned: 2, rejected: 2, approved: 3, documents_received: 5, sent_to_finance: 6 }
-    : { draft: 0, submitted: 2, returned: 2, rejected: 2, approved: 3, documents_received: 4, sent_to_finance: 5 })[status] ?? 0;
+    ? { draft: 0, submitted: 2, returned: 2, rejected: 2, approved: 3, documents_received: 5, sent_to_finance: 6, paid: 7 }
+    : { draft: 0, submitted: 2, returned: 2, rejected: 2, approved: 3, documents_received: 4, sent_to_finance: 5, paid: 6 })[status] ?? 0;
   const stop = status === 'returned' || status === 'rejected';
   return `<ol class="stepper" aria-label="ขั้นตอนของคำขอ">${labels.map((t, i) => {
     const cls = i < now ? 'done' : i === now ? (stop ? 'stop' : 'now') : '';

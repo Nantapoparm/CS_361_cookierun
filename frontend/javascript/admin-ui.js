@@ -17,6 +17,7 @@ function statusSub(c) {
     case 'approved': return c.printMethod === 'self_print' ? `อนุมัติ ${shortDay(c.updatedAt)}` : c.printedAt ? `พิมพ์แล้ว ${shortDay(c.printedAt)}` : `อนุมัติ ${shortDay(c.updatedAt)} · ยังไม่พิมพ์`;
     case 'documents_received': return `รับเอกสาร ${shortDay(c.updatedAt)}`;
     case 'sent_to_finance': return `ส่งการเงิน ${shortDay(c.updatedAt)}`;
+    case 'paid': return `เงินเข้า ${shortDay(c.updatedAt)}`;
     case 'rejected': return `ไม่อนุมัติ ${shortDay(c.updatedAt)}`;
     default: return '';
   }
@@ -35,6 +36,7 @@ const ADMIN_GROUPS = [
   { key: 'self', th: 'รอรับเอกสาร (ปริ้นเอง)', test: (c) => c.status === 'approved' && c.printMethod === 'self_print' },
   { key: 'documents_received', th: 'รับเอกสารแล้ว', test: (c) => c.status === 'documents_received' },
   { key: 'sent_to_finance', th: 'ส่งการเงินแล้ว', test: (c) => c.status === 'sent_to_finance' },
+  { key: 'paid', th: 'เงินเข้าแล้ว', test: (c) => c.status === 'paid', opt: true },
   { key: 'rejected', th: 'ไม่อนุมัติ', test: (c) => c.status === 'rejected', opt: true }
 ];
 
