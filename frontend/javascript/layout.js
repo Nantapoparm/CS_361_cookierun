@@ -8,16 +8,18 @@ const NAV_PUBLIC = [
 const NAV_REQUESTER = [
   { href: 'home.html', text: 'ภาพรวม', match: ['home.html'] },
   { href: 'calendar.html', text: (r) => (r === 'student_helper' ? 'ปฏิทินงาน' : 'ปฏิทินคาบสอน'), match: ['calendar.html', 'makeup.html'] },
-  { href: 'form.html', text: 'สร้างคำขอ', match: ['form.html'] },
+  { href: 'form.html', text: 'สร้างคำขอ', match: ['form.html', 'submit.html'] },
   { href: 'dashboard.html', text: 'ประวัติคำขอ', match: ['dashboard.html', 'detail.html'] }
 ];
+// นักศึกษาช่วยงานมี 2 เมนูตาม Figma S1/S2 (สร้างคำขอจากปุ่มในภาพรวม/ปฏิทิน และดูคำขอจากภาพรวม)
+const NAV_STUDENT = NAV_REQUESTER.slice(0, 2);
 const NAV_ADMIN = [
   { href: 'admin.html', text: 'ภาพรวม', match: ['admin.html'] },
   { href: 'admin-claims.html', text: 'คำขอทั้งหมด', match: ['admin-claims.html', 'admin-review.html'] },
   { href: 'admin-counter.html', text: 'เคาน์เตอร์เซ็นเอกสาร', match: ['admin-counter.html'] }
 ];
-// หน้าที่ยังไม่ได้สร้าง (V3-14, V3-15) แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
-const NAV_SOON = new Set(['home.html', 'calendar.html', 'admin.html', 'admin-claims.html', 'admin-counter.html']);
+// หน้าที่ยังไม่ได้สร้าง แสดงในเมนูแต่กดไม่ได้ — สร้างหน้าแล้วให้ลบออกจากรายการนี้
+const NAV_SOON = new Set();
 
 // ป้ายบทบาท + ตำแหน่งใต้ชื่อ
 const ROLE_CHIP = { instructor: 'อาจารย์', ta: 'TA', student_helper: 'นศ.ช่วยงาน', admin: 'เจ้าหน้าที่' };
@@ -25,7 +27,9 @@ const ROLE_POSITION = { instructor: 'อาจารย์ผู้สอน', t
 
 // อักษรย่อในวงกลม: พยัญชนะแรกของชื่อและนามสกุล (ข้ามสระหน้า เ แ โ ใ ไ)
 const initialOf = (s) => (String(s || '').replace(/^[เแโใไ]/, '').match(/[ก-ฮA-Za-z]/) || [''])[0];
-const initials = (u) => initialOf(u.name) + initialOf(u.lastName);
+const initials = (u) => (initialOf(u.name) + initialOf(u.lastName)) || initialOf(u.username).toUpperCase() || '?';
+// ชื่อที่แสดง: ชื่อ-นามสกุลจาก ID Token ; บัญชีที่ยังไม่มี given_name / family_name → ใช้ username
+const displayName = (u) => `${u.name || ''} ${u.lastName || ''}`.trim() || u.username || '';
 
 function navLinks(items, role) {
   const page = location.pathname.split('/').pop();
@@ -40,19 +44,19 @@ function navLinks(items, role) {
 // user = { name, lastName, role } ของผู้ที่เข้าสู่ระบบ ; ไม่ส่ง user = หน้าสาธารณะ (index.html)
 function renderTopbar(site, user) {
   const m = site.meta;
-  const items = !user ? NAV_PUBLIC : user.role === 'admin' ? NAV_ADMIN : NAV_REQUESTER;
+  const items = !user ? NAV_PUBLIC : user.role === 'admin' ? NAV_ADMIN : user.role === 'student_helper' ? NAV_STUDENT : NAV_REQUESTER;
   const side = user
     ? `<span class="role-chip ${user.role === 'admin' ? 'staff' : ''}">${esc(ROLE_CHIP[user.role] || user.role)}</span>
        <span class="who-box">
-         <span class="who-name">${esc(`${user.name || ''} ${user.lastName || ''}`.trim())}</span>
+         <span class="who-name">${esc(displayName(user))}</span>
          <span class="who-pos">${esc(ROLE_POSITION[user.role] || '')}</span>
        </span>
        <span class="avatar" aria-hidden="true">${esc(initials(user))}</span>
        <button type="button" class="btn-out" data-logout>ออกจากระบบ</button>`
-    : `<a class="btn-in" href="${esc(site.sidebar?.login?.url || 'dashboard.html')}">เข้าสู่ระบบ</a>`;
+    : `<a class="btn-in" href="${esc(site.sidebar?.login?.url || 'login.html')}">เข้าสู่ระบบ</a>`;
 
   const bar = mount('topbar', `
-    <a class="brand" href="${user ? 'dashboard.html' : 'index.html'}">
+    <a class="brand" href="${user ? (user.role === 'admin' ? 'admin.html' : 'home.html') : 'index.html'}">
       <img class="brand-logo" src="${esc(m.logo)}" alt="${esc(m.logoAlt)}">
       <span>
         <span class="brand-name">${esc(m.brand)}</span>
@@ -77,14 +81,10 @@ function renderTopbar(site, user) {
   bar.querySelector('[data-logout]')?.addEventListener('click', logoutNow);
 }
 
-// ออกจากระบบ: ใช้ Auth ของคนที่ 1 ถ้ามี (V3-13) ไม่งั้นกลับหน้าข้อมูลการเบิก
-function logoutNow() {
-  if (typeof Auth !== 'undefined' && Auth.logout) {
-    Auth.logout();
-    location.href = 'login.html';
-  } else {
-    location.href = 'index.html';
-  }
+// ออกจากระบบ: ลบ token ผ่าน Auth (auth.js ของคนที่ 1) แล้วกลับหน้า login
+async function logoutNow() {
+  try { if (typeof Auth !== 'undefined' && Auth.logout) await Auth.logout(); } catch { /* ลบไม่ได้ก็ยังพาไปหน้า login */ }
+  location.href = 'login.html';
 }
 
 function renderHero(site) {

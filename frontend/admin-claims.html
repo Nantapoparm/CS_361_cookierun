@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>คำขอทั้งหมด | ระบบเบิกค่าตอบแทน</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/user.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="app">
+  <header class="topbar" data-mount="topbar"></header>
+  <main class="main"><div class="content">
+
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">เจ้าหน้าที่</div>
+        <h1>คำขอทั้งหมด</h1>
+        <p class="lead" id="lead"></p>
+      </div>
+      <div class="tools"><button type="button" class="btn ghost" id="btnCsv">ส่งออก Excel (CSV)</button></div>
+    </div>
+
+    <div class="filters" id="filters">
+      <select id="fRole" aria-label="บทบาท">
+        <option value="">ทุกบทบาท</option>
+        <option value="instructor">อาจารย์</option>
+        <option value="ta">TA</option>
+        <option value="student_helper">นักศึกษาช่วยงาน</option>
+      </select>
+      <select id="fStatus" aria-label="สถานะ"><option value="">ทุกสถานะ</option></select>
+      <select id="fRound" aria-label="รอบการเบิก"><option value="">ทุกรอบการเบิก</option></select>
+      <select id="fCourse" aria-label="วิชา"><option value="">ทุกวิชา</option></select>
+      <input type="search" id="fSearch" placeholder="ค้นหาชื่อ / เลขที่คำขอ…" aria-label="ค้นหาชื่อหรือเลขที่คำขอ">
+      <button type="button" class="link-btn" id="fClear" hidden>ล้างตัวกรอง</button>
+    </div>
+    <div class="counts" id="counts" role="group" aria-label="กรองตามสถานะ"></div>
+
+    <div id="msg"></div>
+    <div class="table-card" id="tableCard">
+      <table class="dtable admin-list">
+        <thead><tr><th>เลขที่</th><th>บทบาท</th><th>ผู้ขอ</th><th>รายการ</th><th class="num">ชม.</th><th class="num">บาท</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="pager-bar">
+      <span class="pager-info" id="pageInfo"></span>
+      <nav class="pager" id="pager" aria-label="เลือกหน้า"></nav>
+    </div>
+  </div></main>
+  <footer class="site-footer" data-mount="footer"></footer>
+
+  <script src="javascript/core.js"></script>
+  <script src="javascript/layout.js"></script>
+  <script src="javascript/ui.js"></script>
+  <script src="javascript/config.js"></script>
+  <script src="javascript/auth.js"></script>
+  <script src="javascript/api.js"></script>
+  <script src="javascript/pdf.js"></script>
+  <script src="javascript/admin-ui.js"></script>
+  <script src="javascript/admin-claims.js"></script>
+</body>
+</html>

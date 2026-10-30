@@ -23,7 +23,7 @@
     "login": {
       "text": "เข้าสู่ระบบ",
       "enabled": true,
-      "url": "dashboard.html",
+      "url": "login.html",
       "disabledHint": "ระบบเข้าสู่ระบบจะเปิดใช้งานในเวอร์ชันถัดไป"
     }
   },

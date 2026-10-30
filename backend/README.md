@@ -13,7 +13,8 @@ backend/
 │   ├── openapi.yaml              # สัญญา API และค่า CORS (แหล่งความจริง)
 │   ├── scripts/
 │   │   ├── setup-stage.sh        # ตั้งค่า Stage $default และ Access Log
-│   │   └── bind-lambdas.sh       # import openapi.yaml และให้สิทธิ์ API Gateway เรียก Lambda
+│   │   ├── bind-lambdas.sh       # import openapi.yaml ให้สิทธิ์ API Gateway เรียก Lambda และตรวจ JWT Authorizer
+│   │   └── get-token.sh          # ขอ Cognito token ของบัญชีทดสอบ (ใช้กับ smoke-test)
 │   └── tests/
 │       └── smoke-test.sh         # ทดสอบ CORS และ route
 └── data/
@@ -53,16 +54,17 @@ API_ID=39eee8bl4b bash backend/api/scripts/bind-lambdas.sh
 ## การทดสอบ
 
 ```bash
-# CORS (15 รายการ)
+# CORS และ JWT Authorizer ไม่มี token (23 รายการ)
 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
 
-# CORS และทุก route (24 รายการ) — POST /claims จะสร้างข้อมูลจริง
-RUN_ROUTES=1 API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
+# มี token และทดสอบ route ของ V3 (48 รายการ) — ไม่สร้างข้อมูลจริง รันซ้ำได้
+TOKEN=$(bash backend/api/scripts/get-token.sh)
+RUN_ROUTES=1 TOKEN="$TOKEN" API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com bash backend/api/tests/smoke-test.sh
 ```
 
 ## ข้อจำกัด
 
 - ซอร์สโค้ดของ Lambda ทั้ง 8 ฟังก์ชันยังไม่ได้เก็บใน repo นี้ และยังไม่มี path สำหรับเก็บโค้ด
-- ยังไม่มีการยืนยันตัวตน — `X-User-Id` ส่งมาจากเบราว์เซอร์และปลอมแปลงได้ (จะแทนที่ด้วยระบบเข้าสู่ระบบใน V3)
+- V3: ทุก route ต้องส่ง Cognito token ใน `Authorization` (JWT Authorizer ดู [`docs/api-design.md`](../docs/api-design.md#25-jwt-authorizer-cognito-บน-http-api-เดิม-v3)) และ Lambda อ่านผู้ใช้จาก Token ไม่ใช้ `X-User-Id` แล้ว
 - `GET /uploads/presigned-url` มี route แล้ว แต่ฟีเจอร์อัปโหลดยังใช้งานจริงไม่ได้
 - การตั้งค่า API Gateway ยังทำผ่านสคริปต์ CLI ไม่ใช่ Infrastructure as Code (V5)
