@@ -300,7 +300,7 @@ const api = {
 const STATUS = CLAIM_STATUS;
 const EDITABLE = ['draft', 'returned']; // API ตอบ 409 INVALID_STATE ถ้าแก้สถานะอื่น
 // สถานะที่เจ้าหน้าที่ยกเลิกได้ (ข้อเสนอใน FIX-04: ก่อนส่งการเงิน — รอทีมยืนยัน)
-const ADMIN_CANCELLABLE = ['submitted', 'returned', 'approved', 'documents_received'];
+const ADMIN_CANCELLABLE = ['submitted', 'approved', 'documents_received'];
 const ROLE_TH = { instructor: 'อาจารย์', ta: 'ผู้ช่วยสอน', student_helper: 'นักศึกษาช่วยงาน' };
 const KIND_TH = { regular: 'ตาราง', makeup: 'ชดเชย', manual: 'เพิ่มเอง', cancelled: 'งดสอน' };
 const TYPE_TH = { lecture: 'ภาคทฤษฎี', lab: 'ภาคปฏิบัติ' };
@@ -904,7 +904,7 @@ async function mockRequest(method, path, body) {
         if (!ADMIN_CANCELLABLE.includes(c.status)) throw conflict('ยกเลิกได้เฉพาะคำขอที่ยังไม่ส่งการเงิน');
         const from = c.status;
         Object.assign(c, { status: 'draft', printMethod: null, printedAt: null, updatedAt: now });
-        log(c, 'cancelled', from, 'draft', note);
+        log(c, 'admin_cancelled', from, 'draft', note);
         return done({ message: 'เปลี่ยนสถานะสำเร็จเป็น draft', from, to: 'draft' });
       }
       if (sub === 'documents-received' && method === 'POST') {

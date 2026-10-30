@@ -25,6 +25,7 @@ function actionText(a) {
     sent_to_finance: `${a.actor} ส่งการเงินแล้ว`,
     paid: `${a.actor} บันทึกว่าเงินเข้าแล้ว`,
     cancelled: `${a.actor} ยกเลิกคำขอ · กลับเป็นร่าง${a.note ? ` (${a.note})` : ''}`,
+    admin_cancelled: `${a.actor} (เจ้าหน้าที่) ยกเลิกคำขอ · กลับเป็นร่าง${a.note ? ` (${a.note})` : ''}`,
     downloaded: `${a.actor ? `${a.actor} ` : ''}ดาวน์โหลด PDF`,
     print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่',
     makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'

@@ -59,7 +59,7 @@ const MARK = { ok: '✓', warn: '!', bad: '✕' };
 const ACTION_TH = {
   autofill: 'สร้างร่างจากปฏิทิน', created: 'สร้างร่าง (กรอกเอง)', preview: 'ผู้ขอดูตัวอย่าง PDF', submitted: 'ยื่นคำขอ', resubmitted: 'ยื่นใหม่',
   returned: 'ส่งกลับแก้ไข', approved: 'ตรวจผ่าน', rejected: 'ไม่อนุมัติ', printed: 'พิมพ์เอกสาร', documents_received: 'รับเอกสารแล้ว',
-  sent_to_finance: 'ส่งการเงิน', paid: 'บันทึกเงินเข้า', cancelled: 'ยกเลิกคำขอ', downloaded: 'ดาวน์โหลด PDF', print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่', makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
+  sent_to_finance: 'ส่งการเงิน', paid: 'บันทึกเงินเข้า', cancelled: 'ผู้ขอยกเลิกคำขอ', admin_cancelled: 'เจ้าหน้าที่ยกเลิกคำขอ', downloaded: 'ดาวน์โหลด PDF', print_method: 'เปลี่ยนช่องทางเป็นเซ็นกับเจ้าหน้าที่', makeup_form: 'แนบแบบฟอร์มขอสอนชดเชย'
 };
 
 // กล่องการกระทำด้านขวา ตามสถานะ
