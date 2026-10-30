@@ -14,10 +14,10 @@ const API_CONFIG = {
   // ปุ่มที่ต้องใช้ route ใหม่ (FIX-03/04/05) — เปิดเป็น true เมื่อ Lambda + route บน API Gateway พร้อมแล้ว
   // โหมด mock เปิดทุกปุ่มเสมอ
   FEATURES: {
-    cancelClaim: false,  // POST /claims/{id}/cancel           ผู้ขอยกเลิก submitted → draft
-    deleteDraft: false,  // DELETE /claims/{id}                ผู้ขอลบร่าง
-    adminCancel: false,  // POST /admin/claims/{id}/cancel     เจ้าหน้าที่ยกเลิก (note บังคับ)
-    markPaid: false      // POST /admin/claims/mark-paid       sent_to_finance → paid
+    cancelClaim: true,  // POST /claims/{id}/cancel           ผู้ขอยกเลิก submitted → draft
+    deleteDraft: true,  // DELETE /claims/{id}                ผู้ขอลบร่าง
+    adminCancel: true,  // POST /admin/claims/{id}/cancel     เจ้าหน้าที่ยกเลิก (note บังคับ)
+    markPaid: true       // POST /admin/claims/mark-paid       sent_to_finance → paid
   }
 };
 const feature = (k) => API_CONFIG.USE_MOCK || !!API_CONFIG.FEATURES[k];
