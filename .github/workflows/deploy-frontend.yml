@@ -86,9 +86,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Sync to S3
+        # no-cache: เบราว์เซอร์ต้องถามก่อนใช้ไฟล์ใน cache (ไม่เปลี่ยนได้ 304)
+        # กันหน้าพังจาก JS เก่าปนใหม่หลัง deploy
         run: |
           aws s3 sync "$SITE_DIR/" "s3://${{ vars.FRONTEND_BUCKET }}/" \
             --delete \
+            --cache-control "no-cache" \
             --no-progress \
             ${{ inputs.dry_run && '--dryrun' || '' }}
 
