@@ -164,8 +164,9 @@ function renderSide() {
     <h3>สรุปเดือนนี้${user.role === 'ta' && nCourses > 1 ? ` (${nCourses} วิชา)` : ''}</h3>
     ${student() ? '' : '<p class="muted">ข้อมูลที่จะใช้ autofill คำขอ</p>'}
     <ul class="side-courses">${rows || '<li><small>ยังไม่มีรายวิชา</small></li>'}</ul>
-    ${student() ? '' : `<a class="btn block" href="form.html?month=${esc(ym)}">สร้างคำขอจากเดือนนี้</a>
-    ${user.role === 'ta' ? '<p class="muted center">ระบบสร้างให้ 1 ใบต่อวิชา</p>' : ''}`}
+    <a class="btn block" href="form.html?month=${esc(ym)}">สร้างคำขอจากเดือนนี้</a>
+    ${user.role === 'ta' ? '<p class="muted center">ระบบสร้างให้ 1 ใบต่อวิชา</p>' : ''}
+    ${student() ? '<p class="muted center">ระบบสร้างให้ 1 ใบต่องาน</p>' : ''}
   </section>`;
 
   let extra = '';

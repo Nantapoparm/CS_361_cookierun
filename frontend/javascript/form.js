@@ -106,8 +106,15 @@ function restoreRows() {
 }
 
 async function selectTab(i) {
+  // ร่างที่เปิดอยู่ยังมีการแก้ที่รอบันทึกอัตโนมัติ → บันทึกก่อนสลับใบ ; บันทึกไม่สำเร็จ = อยู่ใบเดิม
+  if (claim && (saveTimer || saving) && !(await save(true))) return;
+  // ใบที่ยังไม่ได้บันทึกร่าง: จำแถวที่แก้ไว้ในหน้า สลับกลับมาแล้วไม่หาย (ปิด / รีเฟรชหน้าแล้วหาย)
+  if (!claim && tabs[cur] && !tabs[cur].listed && rows.length) tabs[cur].unsaved = { rows, manual };
   cur = i;
   const t = tabs[i];
+  // URL ตามใบที่เลือก (รีเฟรชแล้วกลับมาใบเดิม)
+  history.replaceState(null, '', t?.listed ? `form.html?id=${encodeURIComponent(t.listed.claimId)}`
+    : `form.html?month=${encodeURIComponent(month)}${t ? `&offeringId=${encodeURIComponent(t.course.offeringId)}` : ''}`);
   claim = null;
   manual = false;
   if (!t) { renderEmpty(); return; }
@@ -117,7 +124,8 @@ async function selectTab(i) {
     try { openClaim(await api.getClaim(t.listed.claimId)); } catch (err) { showError(err, $('msg'), () => selectTab(i)); }
     return;
   }
-  rows = restoreRows() || t.source.map((x) => ({ ...x, key: keyOf(x), checked: true }));
+  if (t.unsaved) ({ rows, manual } = t.unsaved);
+  else rows = restoreRows() || t.source.map((x) => ({ ...x, key: keyOf(x), checked: true }));
   if (!rows.length) { renderEmpty(); return; }
   render();
 }
@@ -141,7 +149,7 @@ function headHtml() {
       <div class="claim-tabs" role="tablist">${tabs.map((t, i) => {
         const h = sumHours(i === cur ? checkedRows() : (t.listed?.items || t.source));
         const who = user.role === 'ta' && t.course.instructorName ? ` · ${t.course.instructorName.replace(/\s.*$/, '')}` : '';
-        return `<button type="button" role="tab" data-tab="${i}" aria-selected="${i === cur}"${claim && i !== cur ? ' disabled' : ''}>ใบที่ ${i + 1} · ${esc(courseShort(t.course))}${esc(who)} · ${num(h)} ชม.${t.listed && !EDITABLE.includes(t.listed.status) ? ' · ยื่นแล้ว' : ''}</button>`;
+        return `<button type="button" role="tab" data-tab="${i}" aria-selected="${i === cur}">ใบที่ ${i + 1} · ${esc(courseShort(t.course))}${esc(who)} · ${num(h)} ชม.${t.listed && !EDITABLE.includes(t.listed.status) ? ' · ยื่นแล้ว' : ''}</button>`;
       }).join('')}</div></div>` : '';
   const fields = student()
     ? [field('งาน', c.courseName), field('ผู้ดูแล', c.instructorName, 'auto'), field('Load', LOAD_TH[user.load] || LOAD_TH.full, 'sys')]
@@ -338,6 +346,7 @@ const itemsBody = () => ({ items: checkedRows().map((r) => ({ ...(r.workId ? { w
 let saving = null;
 async function save(silent = false) {
   clearTimeout(saveTimer);
+  saveTimer = null;
   if (saving) await saving;
   const c = tabs[cur]?.course || claim;
   saving = (async () => {

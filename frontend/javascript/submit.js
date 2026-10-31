@@ -13,6 +13,9 @@ let user, claim, claims = [], rates = [], pdf = null;
 let draft = null;   // ข้อมูลจากขั้นที่ 1 ที่ยังไม่บันทึก (โหมด preview)
 let method = 'sign_with_staff';
 const student = () => user.role === 'student_helper';
+// นักศึกษาช่วยงานไม่ต้องเลือกช่องทาง: กรอกแบบฟอร์มเปล่าด้วยลายมือแล้วนำส่งเอง ใช้ self_print
+// เพื่อให้เจ้าหน้าที่กด "รับเอกสารแล้ว" ได้หลังตรวจผ่าน (ไม่มีขั้นเจ้าหน้าที่พิมพ์ให้)
+const STUDENT_METHOD = 'self_print';
 const docType = () => (student() ? 'blank' : 'claim');
 const formName = () => (student() ? 'แบบฟอร์มเปล่า — นักศึกษาช่วยงาน' : `ใบลงลายมือชื่อ — ${user.role === 'ta' ? 'TA' : 'อาจารย์'}`);
 const docHtml = () => (student() ? blankDocHtml(claim) : claimDocHtml(claim, user));
@@ -29,7 +32,7 @@ function summaryHtml(withMethod) {
     ['ชั่วโมง', countTxt()],
     ['ยอดเบิก', baht(claim.totalAmount)],
     ...(user.role === 'ta' || student() ? [['เพดานรวม', capTxt()]] : []),
-    ...(withMethod && claim.printMethod ? [['ช่องทาง', PRINT_METHOD[claim.printMethod].th]] : [])
+    ...(withMethod && claim.printMethod && !student() ? [['ช่องทาง', PRINT_METHOD[claim.printMethod].th]] : [])
   ];
   return `<h3>สรุป${withMethod ? 'คำขอ' : ''}</h3><div class="rule section-gap"></div>
     <dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
@@ -63,7 +66,7 @@ function renderPreview() {
       <div id="doc"><div class="pdf-frame"><div class="paper loading">${skeleton(['w60', '', 'w80', 'lg', 'lg', 'lg'])}</div></div></div>
       <aside class="form-side">
         <section class="card" id="sum">${summaryHtml(false)}</section>
-        <section class="card" id="channel">
+        <section class="card" id="channel">${student() ? studentChannelHtml() : `
           <h3>เลือกช่องทางยื่น</h3>
           <p class="muted section-gap">ทั้งสองแบบเจ้าหน้าที่ตรวจในระบบก่อน · เซ็นด้วยปากกาน้ำเงินบนเอกสารจริง</p>
           <div class="choices">
@@ -74,13 +77,20 @@ function renderPreview() {
             <button type="button" class="btn${method === 'sign_with_staff' ? '' : ' ghost'}" data-go="sign_with_staff" disabled>ยื่นคำขอในระบบ</button>
             <button type="button" class="btn${method === 'self_print' ? '' : ' ghost'}" data-go="self_print" disabled>ส่งตรวจ แล้วปริ้นเซ็นเอง</button>
           </div>
-          <p class="muted" id="pdfHint">ปุ่มจะใช้งานได้เมื่อสร้าง PDF สำเร็จ</p>
+          <p class="muted" id="pdfHint">ปุ่มจะใช้งานได้เมื่อสร้าง PDF สำเร็จ</p>`}
         </section>
       </aside>
     </div>`;
   document.querySelectorAll('[data-pm]').forEach((b) => b.addEventListener('click', () => pick(b.dataset.pm)));
   document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { pick(b.dataset.go); confirmSubmit(); }));
   loadPdf();
+}
+
+function studentChannelHtml() {
+  return `<h3>ยื่นคำขอ</h3>
+    <p class="muted section-gap">เจ้าหน้าที่ตรวจในระบบก่อน · พิมพ์แบบฟอร์มเปล่า (หรือรับจากเจ้าหน้าที่) กรอกด้วยลายมือ แล้วนำส่งเจ้าหน้าที่</p>
+    <div class="side-btns"><button type="button" class="btn" data-go="${STUDENT_METHOD}" disabled>ยื่นคำขอ</button></div>
+    <p class="muted" id="pdfHint">ปุ่มจะใช้งานได้เมื่อโหลดแบบฟอร์มสำเร็จ</p>`;
 }
 
 function pick(pm) {
@@ -135,15 +145,18 @@ async function persistDraft() {
 
 // I7 — ยืนยันการยื่น (ต้องติ๊กรับรองข้อมูล)
 async function confirmSubmit() {
-  const self = method === 'self_print';
+  const self = method === 'self_print' && !student();
   const deadline = periodTitle(claim);
+  const warn = student()
+    ? 'หลังยื่นจะแก้ไขไม่ได้ จนกว่าเจ้าหน้าที่จะส่งกลับ · กรอกแบบฟอร์มด้วยลายมือ แล้วนำส่งเจ้าหน้าที่ เจ้าหน้าที่จะกด <b>รับเอกสารแล้ว</b> เมื่อได้รับ'
+    : self
+      ? 'หลังส่งจะแก้ไขไม่ได้ จนกว่าเจ้าหน้าที่จะส่งกลับ · เมื่อตรวจผ่าน ระบบจะเปิดให้ <b>ดาวน์โหลด PDF ไปปริ้นเซ็นเอง</b> แล้วนำส่งเจ้าหน้าที่'
+      : 'หลังยื่นจะแก้ไขไม่ได้ จนกว่าเจ้าหน้าที่จะส่งกลับ · เมื่อเจ้าหน้าที่ตรวจผ่าน ระบบจะแจ้งให้ไป <b>เซ็นเอกสารที่เคาน์เตอร์</b>';
   const ok = await openModal({
     eyebrow: 'ยืนยันการยื่นคำขอ',
     title: `${self ? 'ส่งตรวจ' : 'ยื่นคำขอ'} ${courseShort(claim)} เดือน ${thMonth(claim.month)}?`,
     body: `<dl class="kv"><dt>ชั่วโมง</dt><dd>${esc(countTxt())}</dd><dt>ยอดเบิก</dt><dd>${esc(baht(claim.totalAmount))}</dd><dt>รอบการเบิก</dt><dd>${esc(deadline)}</dd></dl>
-      ${alertHtml('warn', self
-        ? 'หลังส่งจะแก้ไขไม่ได้ จนกว่าเจ้าหน้าที่จะส่งกลับ · เมื่อตรวจผ่าน ระบบจะเปิดให้ <b>ดาวน์โหลด PDF ไปปริ้นเซ็นเอง</b> แล้วนำส่งเจ้าหน้าที่'
-        : 'หลังยื่นจะแก้ไขไม่ได้ จนกว่าเจ้าหน้าที่จะส่งกลับ · เมื่อเจ้าหน้าที่ตรวจผ่าน ระบบจะแจ้งให้ไป <b>เซ็นเอกสารที่เคาน์เตอร์</b>')}
+      ${alertHtml('warn', warn)}
       <label class="check"><input type="checkbox" id="agree"> ข้าพเจ้ายืนยันว่าข้อมูลถูกต้องตามความเป็นจริง</label>`,
     okText: self ? 'ยืนยันส่งตรวจ' : 'ยืนยันยื่นคำขอ',
     validate: (el) => {
@@ -174,6 +187,13 @@ const stepItem = (n, title, desc) => `<li><span class="n">${n}</span><div><b>${t
 function nextSteps() {
   const due = claim.deadline ? thDate(claim.deadline, false) : '';
   const counter = `ห้อง ${esc(OFFICE.room)} · ${esc(OFFICE.hours)}`;
+  if (student()) {
+    return ['กรอกแบบฟอร์มแล้วนำส่ง', [
+      stepItem(1, 'รอเจ้าหน้าที่ตรวจ <span class="muted">(ปกติภายใน 1–2 วันทำการ)</span>', 'ระบบแจ้งในหน้าภาพรวม · ถ้าต้องแก้ เจ้าหน้าที่จะส่งกลับพร้อมหมายเหตุ'),
+      stepItem(2, 'พิมพ์แบบฟอร์มเปล่า <span class="muted">หรือรับจากเจ้าหน้าที่</span> แล้วกรอกด้วยลายมือ', 'ให้ผู้ควบคุมงานเซ็นรับรอง'),
+      stepItem(3, `นำส่งเจ้าหน้าที่ <span class="muted">ภายใน ${esc(due)}</span>`, `${counter} · เจ้าหน้าที่กด “รับเอกสารแล้ว” → สถานะอัปเดตให้เห็น`)
+    ]];
+  }
   if (claim.printMethod === 'self_print') {
     return ['รอตรวจ แล้วปริ้นเซ็นเอง', [
       stepItem(1, 'รอเจ้าหน้าที่ตรวจ <span class="muted">(ปกติภายใน 1–2 วันทำการ)</span>', 'ระบบแจ้งในหน้าภาพรวม · ถ้าต้องแก้ เจ้าหน้าที่จะส่งกลับพร้อมหมายเหตุ'),
@@ -189,7 +209,7 @@ function nextSteps() {
 }
 
 function renderDone() {
-  const self = claim.printMethod === 'self_print';
+  const self = claim.printMethod === 'self_print' && !student();
   const [headline, steps] = nextSteps();
   $('title').textContent = self ? 'ส่งตรวจเรียบร้อย' : 'ยื่นคำขอเรียบร้อย';
   $('lead').textContent = '';
@@ -210,7 +230,7 @@ function renderDone() {
         ${canSwitch ? `<div class="section-gap">${alertHtml('info', 'เปลี่ยนใจ? ให้เจ้าหน้าที่พิมพ์ไว้ให้ แล้ว <button type="button" class="link-btn" id="switch">เปลี่ยนเป็นไปเซ็นที่เคาน์เตอร์</button> ได้ จนกว่าจะตรวจเสร็จ (ไม่ต้องยื่นใหม่)')}</div>` : ''}
       </section>
       <aside class="form-side"><section class="card">${summaryHtml(true)}
-        ${self ? '' : '<button type="button" class="btn ghost block section-gap" id="copy">ดาวน์โหลดสำเนา PDF</button>'}</section></aside>
+        ${self ? '' : `<button type="button" class="btn ghost block section-gap" id="copy">${student() ? 'ดาวน์โหลดแบบฟอร์มเปล่า' : 'ดาวน์โหลดสำเนา PDF'}</button>`}</section></aside>
     </div>`;
   $('switch')?.addEventListener('click', switchMethod);
   $('copy')?.addEventListener('click', download);
@@ -245,7 +265,7 @@ async function init() {
       if (!draft?.rows?.length) { location.replace('form.html'); return; }
       [claims, rates] = await Promise.all([api.getClaims().catch(() => []), api.getRates()]);
       claim = claimFromDraft(draft);
-      method = 'sign_with_staff';
+      method = student() ? STUDENT_METHOD : 'sign_with_staff';
       renderPreview();
       return;
     }
@@ -253,7 +273,7 @@ async function init() {
     if (q.get('done') && !EDITABLE.includes(claim.status)) { renderDone(); return; }
     if (!EDITABLE.includes(claim.status)) { location.replace(`detail.html?id=${encodeURIComponent(claim.claimId)}`); return; }
     if (!claim.items.length) { location.replace(`form.html?id=${encodeURIComponent(claim.claimId)}`); return; }
-    method = claim.printMethod || 'sign_with_staff';
+    method = student() ? STUDENT_METHOD : claim.printMethod || 'sign_with_staff';
     renderPreview();
   } catch (err) {
     $('body').innerHTML = '';
