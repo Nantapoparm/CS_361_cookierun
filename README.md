@@ -237,6 +237,7 @@ Base URL: `https://39eee8bl4b.execute-api.us-east-1.amazonaws.com`
 |---|---|---|
 | `401` `{"message":"Unauthorized"}` | API Gateway | ไม่มี Token หรือ Token ไม่ถูกต้อง / หมดอายุ (ไม่ผ่าน Lambda) |
 | `403` `{"success":false,"error":{"code":"FORBIDDEN",...}}` | Lambda | เข้าสู่ระบบแล้วแต่ไม่มีสิทธิ์ เช่น ไม่ใช่ `admin` เข้า `/admin/*` หรือไม่พบผู้ใช้ที่ผูกกับ `cognitoSub` |
+| `429` `{"message":"Too Many Requests"}` | API Gateway | เกิน Throttling ของ Stage (V4) รอแล้วลองใหม่ ดู [`docs/api-design.md`](docs/api-design.md#7-รองรับการใช้งานพร้อมกัน-v4) |
 
 **Route ของ V2 (8 Route)**
 

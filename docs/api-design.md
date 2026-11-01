@@ -1,4 +1,4 @@
-# API Design (V2–V3) — API Gateway
+# API Design (V2–V4) — API Gateway
 
 ไฟล์หลัก: [`backend/api/openapi.yaml`](../backend/api/openapi.yaml) (นำเข้า API Gateway แบบ HTTP API ได้)
 
@@ -292,3 +292,96 @@ aws logs tail /aws/apigateway/cookierun-claim-api --since 10m --region us-east-1
 ```
 
 ตรวจใน Console: API Gateway → `Teaching Compensation Claim API` → Authorization → แท็บ Manage authorizers (ค่า `cognitoJwt`) และแท็บ Attach authorizers to routes (ทุก route ต้องมี `JWT Auth`)
+## 7. รองรับการใช้งานพร้อมกัน (V4)
+
+### 7.1 ข้อจำกัดจริงของระบบ (ตรวจเมื่อ 2026-11-01)
+
+| รายการ | ค่า | ผลต่อ API |
+|---|---|---|
+| โควตา Lambda ของบัญชี (`ConcurrentExecutions`, `us-east-1`) | **10** (ค่าปกติของ AWS คือ 1000) | ทั้ง 17 ฟังก์ชันใช้ 10 ช่องนี้ร่วมกัน ถ้ามีงานพร้อมกันเกิน 10 Lambda จะปฏิเสธทันทีและผู้ใช้ได้ error ตั้ง Reserved Concurrency ไม่ได้ เพราะ AWS ต้องเหลือช่องที่ไม่ได้จองไว้อย่างน้อย 100 |
+| เวลาที่ Lambda ใช้ต่อ request ในวันปกติ (p50) | `getTerms` 12–70 ms, `admin` 20–45 ms, `generatePdf` 0.2–0.8 วิ (cold start ราว 0.4 วิ ทุกฟังก์ชัน, PDF สูงสุด 1.4 วิ) | ช่องของ Lambda ถูกใช้สั้นมาก route ทั่วไปรับได้หลายร้อย req/s ก่อนชนโควตา |
+| เวลาที่ผู้ใช้รอ (จากเครื่องในไทย) | ราว 0.85 วิ ต่อ request | ส่วนใหญ่เป็นเวลาเดินทางของเครือข่ายไทย ↔ `us-east-1` ไม่ใช่เวลาของ Lambda |
+| วันที่ระบบช้าผิดปกติ (2026-10-19) | `admin` สูงสุด 30 วิ และ `generatePdf` 60 วิ (ชน timeout), p95 ของ PDF 32 วิ | Concurrency แตะ **10** เต็มโควตา ทั้งที่มีแค่ทีมทดสอบ (1,829 invocations ทั้งวัน) เพราะ request ที่ค้างถือช่องไว้นาน |
+| Throttling ของ Stage `$default` | ก่อน V4 ยังไม่ได้ตั้ง (ใช้ค่าบัญชี 10,000 req/s) | API Gateway ส่ง request ทุกตัวต่อไปให้ Lambda แม้ Lambda รับไม่ไหว (ตั้งแล้วใน 7.2) |
+| Access Log ของ API | Log group `/aws/apigateway/cookierun-claim-api` ถูกลบเมื่อ 2026-10-19 | ไม่มี Access Log ระหว่าง 2026-10-19 ถึง 2026-11-01 และ `update-stage` ทุกครั้งล้มเหลว (`LogDestinationNotFoundException`) สร้างใหม่ด้วย `setup-stage.sh` แล้วเมื่อ 2026-11-01 |
+
+จำนวน request ต่อวินาทีที่รับได้ประมาณ `โควตา ÷ เวลาที่ Lambda ใช้ต่อ request` (ไม่ใช่เวลาที่ผู้ใช้รอ) ในวันปกติ `admin` 10 ÷ 0.045 วิ ≈ 220 req/s แต่ถ้า Lambda ค้างแบบวันที่ 19 ต.ค. (30 วิ) จะเหลือ 10 ÷ 30 ≈ 0.3 req/s ข้อจำกัดของโควตา 10 จึงเห็นผลเมื่อระบบช้าลง ไม่ใช่ตอนทำงานปกติ
+
+### 7.2 Throttling ที่ API Gateway
+
+- **Requirement:** เมื่อมี request เข้ามาเกินที่ระบบรับได้ (ผู้ใช้พร้อมกันมาก หน้าเว็บเรียกซ้ำผิดพลาด หรือสคริปต์ยิงถี่) ต้องปฏิเสธอย่างมีรูปแบบที่ API Gateway ก่อนถึง Lambda และ RDS และ route ที่หนักต้องไม่กินโควตาของ route อื่น
+- **Decision:** ตั้ง Throttling ของ Stage ด้วย [`set-throttling.sh`](../backend/api/scripts/set-throttling.sh)
+
+| Route | Rate (req/s) | Burst | เหตุผล |
+|---|---|---|---|
+| ทุก route (ค่าเริ่มต้น) | 20 | 10 | หน้าเว็บหนึ่งหน้าเรียก 2–3 request 20 req/s จึงเท่ากับเปิดหน้าได้ราว 7 หน้าต่อวินาที เกินการใช้งานจริงของคณะ burst 10 เท่ากับโควตา Lambda แม้ทุก request เป็น cold start (0.4 วิ) ก็ใช้ไม่เกิน 8 ช่อง |
+| `GET /claims/{id}/pdf` | 1 | 2 | สร้าง PDF ใช้ CPU มากที่สุดและเขียนไฟล์ลง S3 ผู้ใช้สร้างทีละใบ 1 req/s จึงพอ และจำกัดความเสียหายเมื่อ PDF ช้าผิดปกติแบบวันที่ 19 ต.ค. |
+
+- request ที่เกินจะได้ `429 {"message":"Too Many Requests"}` จาก API Gateway โดยไม่ถึง Lambda และ RDS ฝั่งหน้าเว็บควรรอแล้วลองใหม่ (1, 2, 4 วินาที)
+- **Trade-off:** Throttling กันปริมาณ request ที่เข้ามา แต่ไม่ได้แก้กรณีที่ Lambda ช้าลงเอง (แบบวันที่ 19 ต.ค.) กรณีนั้นใช้ Alarm (`cookierun-lambda-concurrency-high`, `cookierun-api-latency-p95`) ให้รู้ตัวแทน HTTP API ตั้ง Throttling ได้ระดับ Stage และ route เท่านั้น ไม่มี Usage Plan แยกต่อผู้ใช้แบบ REST API ผู้ใช้คนเดียวที่ยิงถี่จึงทำให้คนอื่นได้ 429 ได้ ระบบนี้มีผู้ใช้ไม่มากและทุก route ต้อง login จึงยอมรับได้ ค่า rate/burst ต้องปรับใหม่เมื่อได้โควตา Lambda เพิ่ม (คอขวดถัดไปคือจำนวน connection ของ RDS `db.t3.micro`)
+
+### 7.3 Load Test และ Alarm
+
+```bash
+export API_URL=https://39eee8bl4b.execute-api.us-east-1.amazonaws.com API_ID=39eee8bl4b
+export TOKEN=$(bash backend/api/scripts/get-token.sh)   # ใช้บัญชี admin ถ้าจะยิง /admin/claims
+
+# 1) วัดก่อนตั้ง Throttling (อ่านอย่างเดียว)
+bash backend/api/tests/load-test.sh                                          # GET /terms ที่ 1, 5, 10, 20, 30
+ROUTE=/admin/claims LEVELS="10 20 30 40" bash backend/api/tests/load-test.sh
+
+# 2) สร้าง Log group ของ Access Log (ถ้าไม่มี) แล้วตั้ง Throttling (DRY_RUN=1 เพื่อดูค่าก่อน)
+bash backend/api/scripts/setup-stage.sh
+bash backend/api/scripts/set-throttling.sh
+
+# 3) วัดซ้ำด้วยคำสั่งเดียวกับข้อ 1
+
+# 4) Alarm: 5xx, latency p95, Lambda throttles, concurrency ใกล้โควตา (รันซ้ำหลังได้โควตาเพิ่ม)
+bash backend/api/scripts/setup-alarms.sh
+```
+
+- load test ใช้โควตา Lambda ร่วมกับทั้งบัญชี ระหว่างรันเพื่อนในทีมอาจเรียก API ไม่ได้ ควรนัดเวลาก่อน
+- เครื่องเดียวในไทยยิงได้ราว `จำนวนพร้อมกัน ÷ 0.85` req/s (40 พร้อมกัน ≈ 47 req/s) ซึ่งยังไม่พอทำให้ Lambda ที่ใช้เวลา 10–50 ms เต็มโควตา จึงใช้ผลนี้พิสูจน์ Throttling ของ API Gateway ได้ แต่พิสูจน์เพดาน Lambda ไม่ได้
+- หลังรัน `bind-lambdas.sh` (reimport) ให้ตรวจว่า Throttling ยังอยู่ด้วย `DRY_RUN=1 bash backend/api/scripts/set-throttling.sh` ถ้าหายหรือเปลี่ยนชื่อ route PDF ให้รันใหม่
+
+**ผลการทดสอบ** (2026-11-01 จากเครื่องในไทย, request ละ 5 ครั้งต่อ worker)
+
+ก่อนตั้ง Throttling
+
+| Route | พร้อมกัน | ≈ req/s | 2xx | 429 | 5xx | p95 (วิ) |
+|---|---|---|---|---|---|---|
+| `GET /terms` | 1 | 1 | 5 | 0 | 0 | 0.89 |
+| `GET /terms` | 5 | 6 | 25 | 0 | 0 | 1.02 |
+| `GET /terms` | 10 | 12 | 50 | 0 | 0 | 0.91 |
+| `GET /terms` | 20 | 24 | 100 | 0 | 0 | 0.90 |
+| `GET /terms` | 30 | 35 | 150 | 0 | 0 | 0.89 |
+| `GET /admin/claims` | 10 | 12 | 50 | 0 | 0 | 1.49 |
+| `GET /admin/claims` | 20 | 24 | 100 | 0 | 0 | 0.92 |
+| `GET /admin/claims` | 30 | 35 | 150 | 0 | 0 | 0.88 |
+| `GET /admin/claims` | 40 | 47 | 200 | 0 | 0 | 0.88 |
+
+CloudWatch ช่วงที่ทดสอบ: Lambda `ConcurrentExecutions` สูงสุด 6 (`/terms`) และ 7 (`/admin/claims`), `Throttles` = 0, `admin` ใช้เวลาเฉลี่ย 49 ms (p95 71 ms)
+
+หลังตั้ง Throttling (ทุก route 20 req/s burst 10)
+
+| Route | พร้อมกัน | ≈ req/s | 2xx | 429 | 5xx | p95 (วิ) |
+|---|---|---|---|---|---|---|
+| `GET /admin/claims` | 10 | 12 | 50 | 0 | 0 | 1.53 |
+| `GET /admin/claims` | 20 | 24 | 100 | 0 | 0 | 0.93 |
+| `GET /admin/claims` | 30 | 35 | 137 | 13 | 0 | 0.91 |
+| `GET /admin/claims` | 40 | 47 | 173 | 27 | 0 | 0.90 |
+
+CloudWatch ช่วงที่ทดสอบ: Lambda `ConcurrentExecutions` สูงสุด 8, `Throttles` = 0, API Gateway 5xx = 0, RDS `CPUUtilization` ไม่เกิน 5% และ Alarm `cookierun-lambda-concurrency-high` (เกณฑ์ ≥ 8) เปลี่ยนเป็น `ALARM` ตอนทดสอบ
+
+สรุปผล:
+- เกิน 20 req/s แล้ว API Gateway ตอบ `429` แทนการส่งต่อให้ Lambda (30 พร้อมกันถูกปฏิเสธ 9%, 40 พร้อมกัน 14%) ส่วน request ที่ผ่านยังเร็วเท่าเดิม (p95 ไม่ถึง 1 วิ) และไม่มี 5xx
+- ที่ 20 พร้อมกัน (≈24 req/s) ยังไม่มี 429 เพราะ burst 10 รับส่วนที่เกินในช่วงสั้น ๆ ของการทดสอบไว้ได้ และ request จากเครื่องเดียวไม่ได้มาถึงพร้อมกันทุกตัว
+- Alarm concurrency ทำงานจริง: เครื่องเดียวยิง 40 พร้อมกันก็ทำให้ Lambda ใช้ 8 จาก 10 ช่อง ถ้ามีผู้ใช้จริงเพิ่มเข้ามาพร้อมกันจะเริ่มชนโควตา ซึ่งยืนยันว่าโควตา 10 คือข้อจำกัดหลักของระบบ
+- smoke test (`RUN_ROUTES=1`, token admin) หลังตั้ง Throttling ไม่มี route ใดได้ 429 (55/56 ผ่าน ข้อที่ไม่ผ่านคือ `DELETE /schedule/{id}` ได้ 500 เพราะ Lambda ต่อ RDS ไม่ได้ (timeout) ตอน cold start ไม่เกี่ยวกับ Throttling)
+
+### 7.4 สิ่งที่ต้องทำเมื่อใช้งานจริง (นอกขอบเขตของ API)
+
+- ขอเพิ่มโควตา Lambda concurrency เป็น 1000 ผ่าน Service Quotas แล้วปรับ rate/burst ตามผล load test
+- ใช้ RDS Proxy หรือขยาย instance เมื่อ concurrency สูงขึ้น เพื่อไม่ให้ connection ของ RDS เต็ม
+- ใส่ Lambda ไว้หลาย subnet หลาย AZ (ปัจจุบัน 15 จาก 17 ฟังก์ชันอยู่ `us-east-1a` subnet เดียว) และพิจารณา RDS Multi-AZ
+- หน้าเว็บลองใหม่อัตโนมัติเมื่อได้ `429`
