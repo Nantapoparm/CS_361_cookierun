@@ -4,7 +4,8 @@ info:
   description: >-
     API สำหรับระบบเบิกค่าตอบแทนการสอน (CS361 V3) ทุก Route ต้องส่ง Cognito Token ใน Header Authorization
     request / response ในไฟล์นี้ตรงกับโค้ด Lambda ที่ deploy อยู่ (backend/lambda/) ถ้าแก้ Lambda ต้องแก้ไฟล์นี้ตาม
-  version: 3.2.0
+    ทุก Route อาจได้ 429 เมื่อเกิน Throttling ของ Stage (V4)
+  version: 3.3.0
 
 # ---------------------------------------------------------------
 # CORS (API Gateway HTTP API จัดการ Preflight OPTIONS ให้เอง)
@@ -69,6 +70,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -101,6 +103,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404':
           description: ไม่พบรายวิชา (offeringId) หรือไม่พบผู้ใช้
           content:
@@ -137,6 +140,7 @@ paths:
               schema: { $ref: '#/components/schemas/ClaimResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
@@ -171,6 +175,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -196,6 +201,7 @@ paths:
                 data: { message: ลบร่างคำขอสำเร็จ, claimId: c003 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -240,6 +246,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -281,6 +288,7 @@ paths:
                         lastDay: 10
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -318,6 +326,7 @@ paths:
                     maxHoursHalfLoad: null
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -360,6 +369,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -433,6 +443,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -480,6 +491,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -518,6 +530,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404':
           description: ไม่พบคาบ หรือไม่ใช่คาบของผู้ใช้
           content:
@@ -542,6 +555,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404':
           description: ไม่พบคาบ หรือไม่ใช่คาบของผู้ใช้
           content:
@@ -589,6 +603,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404':
           description: ไม่พบรายวิชา (offeringId)
           content:
@@ -638,6 +653,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
@@ -687,6 +703,7 @@ paths:
                     createdAt: "2026-10-21T03:12:00Z"
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
@@ -741,6 +758,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -784,6 +802,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -836,6 +855,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
         type: AWS_PROXY
@@ -862,6 +882,7 @@ paths:
               schema: { $ref: '#/components/schemas/ClaimResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
       x-amazon-apigateway-integration:
@@ -911,6 +932,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -940,6 +962,7 @@ paths:
               example: { success: true, data: { message: บันทึกสถานะการพิมพ์สำเร็จ } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -971,6 +994,7 @@ paths:
                 data: { message: เปลี่ยนสถานะสำเร็จเป็น documents_received, from: approved, to: documents_received }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -1017,6 +1041,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -1060,6 +1085,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -1103,6 +1129,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -1148,6 +1175,14 @@ components:
           example:
             success: false
             error: { code: FORBIDDEN, message: "ไม่มีสิทธิ์เข้าถึงคำขอนี้" }
+    TooManyRequests:
+      description: >-
+        เกิน Throttling ของ Stage (API Gateway ตอบเอง ไม่ผ่าน Lambda) ตั้งด้วย backend/api/scripts/set-throttling.sh
+        ผู้เรียกควรรอสักครู่แล้วลองใหม่ (เช่น 1, 2, 4 วินาที)
+      content:
+        application/json:
+          example:
+            message: Too Many Requests
     BadRequest:
       description: ข้อมูลที่ส่งมาไม่ถูกต้อง หรือผิดกฎการเบิก (เช่น เกินเพดานชั่วโมง)
       content:
