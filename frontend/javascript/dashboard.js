@@ -42,7 +42,7 @@ const row = (c) => `<tr>
   <td data-label="งานเดือน">${esc(thMonth(c.month))}</td>
   <td data-label="รอบการเบิก">${esc(cycleShort(c))}</td>
   <td data-label="ชม." class="num">${num(c.totalHours)}</td>
-  <td data-label="ยอดเบิก (บาท)" class="num">${num(c.totalAmount)}</td>
+  <td data-label="ยอดเบิก (บาท)" class="num">${amountCell(c.totalAmount)}</td>
   <td data-label="สถานะ">${chip(c.status, c.printMethod)}</td>
   <td class="act">${c.status === 'returned' || c.status === 'draft'
     ? `<a class="btn ghost sm" href="form.html?id=${encodeURIComponent(c.claimId)}">แก้ไข</a> ` : ''}<a class="btn ghost sm" href="detail.html?id=${encodeURIComponent(c.claimId)}">ดูรายละเอียด</a></td>
@@ -80,8 +80,8 @@ function render() {
   }
   if (!$('rows')) restoreTable();
   $('rows').innerHTML = slice.map(row).join('');
-  const h = list.reduce((s, c) => s + Number(c.totalHours || 0), 0), a = list.reduce((s, c) => s + Number(c.totalAmount || 0), 0);
-  $('foot').innerHTML = `<tr class="sum"><td colspan="4">รวม ${list.length} รายการ</td><td data-label="ชม." class="num">${num(h)}</td><td data-label="ยอดเบิก (บาท)" class="num">${num(a)}</td><td colspan="2"></td></tr>`;
+  const h = list.reduce((s, c) => s + Number(c.totalHours || 0), 0);
+  $('foot').innerHTML = `<tr class="sum"><td colspan="4">รวม ${list.length} รายการ</td><td data-label="ชม." class="num">${num(h)}</td><td data-label="ยอดเบิก (บาท)" class="num">${amountTotal(list)}</td><td colspan="2"></td></tr>`;
   $('pageInfo').textContent = `แสดง ${start + 1}–${start + slice.length} จาก ${list.length} รายการ`;
   $('pager').innerHTML = pages <= 1 ? `<span class="pg on" aria-current="page">1</span>` :
     `<button type="button" class="pg" data-p="${page - 1}"${page === 1 ? ' disabled' : ''} aria-label="หน้าก่อน">‹</button>` +

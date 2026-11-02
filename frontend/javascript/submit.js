@@ -121,7 +121,7 @@ function claimFromDraft(d) {
   const items = d.rows.filter((r) => r.checked).map(({ key, checked, ...x }) => x);
   const r = rateOf(rates, user.role);
   const totalHours = sumHours(items);
-  const totalAmount = student()
+  const totalAmount = r.ratePerHour == null ? null : student()
     ? items.reduce((s, x) => s + Math.min(x.hours * (r.ratePerHour || 0), r.maxAmountPerDay || Infinity), 0)
     : Math.round(totalHours * (r.ratePerHour || 0) * 100) / 100;
   const t = termOfDate(parseMonth(d.month)), per = periodFromDate();
