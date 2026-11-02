@@ -31,7 +31,7 @@ const row = (c) => {
     <td data-label="บทบาท">${roleTag(c.role)}</td>
     <td data-label="ผู้ขอ" class="who">${esc(c.requesterName)}</td>
     <td data-label="รายการ">${esc(itemLabel(c))}</td>
-    <td data-label="บาท" class="num">${num(c.totalAmount)}</td>
+    <td data-label="บาท" class="num">${amountCell(c.totalAmount)}</td>
     <td data-label="สถานะ" class="st">${got ? doneChip() : chip(c.status, c.printMethod)}${!got && tab === 'sign' ? `<small>${c.printedAt ? `พิมพ์แล้ว ${esc(shortDay(c.printedAt))}` : 'ยังไม่พิมพ์'}</small>` : ''}</td>
     <td class="act">${act}</td>
   </tr>`;
@@ -63,8 +63,7 @@ function render() {
   // แถบส่งการเงิน: รวมคำขอที่รับเอกสารแล้วทั้ง 2 แท็บ
   const got = received();
   const sign = got.filter((c) => c.printMethod !== 'self_print').length, self = got.length - sign;
-  const sum = got.reduce((s, c) => s + Number(c.totalAmount || 0), 0);
-  $('bar').innerHTML = `<span>${tab === 'self' ? `รับเอกสารแล้ว <b>${self}</b> รายการ · ส่งการเงินรวมกับแท็บเคาน์เตอร์ในรอบเดียว` : `เซ็นแล้ว <b>${sign}</b> + รับเอกสารปริ้นเอง <b>${self}</b> · รวม <b>${num(sum)}</b> บาท`}</span>
+  $('bar').innerHTML = `<span>${tab === 'self' ? `รับเอกสารแล้ว <b>${self}</b> รายการ · ส่งการเงินรวมกับแท็บเคาน์เตอร์ในรอบเดียว` : `เซ็นแล้ว <b>${sign}</b> + รับเอกสารปริ้นเอง <b>${self}</b> · รวม <b>${amountTotal(got, ' บาท')}</b>`}</span>
     <button type="button" class="btn" id="btnFinance"${got.length ? '' : ' disabled'}>${tab === 'self' ? 'ส่งการเงิน (รวมแท็บเคาน์เตอร์)' : 'ส่งการเงิน'} (${got.length})</button>`;
   $('btnFinance').addEventListener('click', sendFinance);
 }
@@ -107,12 +106,11 @@ async function printRows(ids) {
 // AD6 — ยืนยันส่งการเงินเป็นชุด
 async function sendFinance() {
   const got = received();
-  const sum = got.reduce((s, c) => s + Number(c.totalAmount || 0), 0);
   const ok = await openModal({
     eyebrow: 'ยืนยันส่งการเงิน',
     title: `ส่ง ${got.length} รายการให้การเงิน?`,
-    body: `<ul class="fin-list">${got.map((c) => `<li><span>#${esc(c.claimId)} · ${esc(c.requesterName)}${c.printMethod === 'self_print' ? ' <small>(ปริ้นเซ็นเอง)</small>' : ''}</span><b>${num(c.totalAmount)}</b></li>`).join('')}
-        <li class="sum"><span>รวม ${got.length} รายการ</span><b>${num(sum)} บาท</b></li></ul>
+    body: `<ul class="fin-list">${got.map((c) => `<li><span>#${esc(c.claimId)} · ${esc(c.requesterName)}${c.printMethod === 'self_print' ? ' <small>(ปริ้นเซ็นเอง)</small>' : ''}</span><b>${amountCell(c.totalAmount)}</b></li>`).join('')}
+        <li class="sum"><span>รวม ${got.length} รายการ</span><b>${amountTotal(got, ' บาท')}</b></li></ul>
       ${alertBox('warn', '', 'สถานะจะเปลี่ยนเป็น "ส่งการเงินแล้ว" และผู้ขอจะได้รับแจ้ง · ยืนยันว่าเอกสารฉบับจริงที่เซ็นแล้วอยู่ครบ')}`,
     okText: 'ยืนยันส่งการเงิน',
     onOk: async () => { try { await api.sendToFinance(got.map((c) => c.claimId)); } catch (err) { throw new Error(errorText(err)); } }

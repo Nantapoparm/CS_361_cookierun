@@ -306,7 +306,21 @@ const KIND_TH = { regular: 'ตาราง', makeup: 'ชดเชย', manual:
 const TYPE_TH = { lecture: 'ภาคทฤษฎี', lab: 'ภาคปฏิบัติ' };
 
 const $ = (id) => document.getElementById(id);
-const baht = (n) => num(n) + ' บาท';
+// totalAmount เป็น null เมื่อคำขอมีแถวงานที่ไม่มีอัตราใน compensation_rates → แสดง "ยังไม่มีอัตรา" ไม่ใช่ 0
+const NO_RATE = 'ยังไม่มีอัตรา';
+const NO_RATE_HINT = 'ยังคำนวณยอดไม่ได้ เพราะไม่มีอัตราค่าตอบแทนของงานนี้ — ติดต่อเจ้าหน้าที่';
+const hasAmount = (n) => n !== null && n !== undefined && n !== '';
+const baht = (n) => (hasAmount(n) ? num(n) + ' บาท' : NO_RATE);
+// ช่องยอดเบิกในตาราง (HTML)
+const amountCell = (n) => (hasAmount(n) ? num(n) : `<span class="no-rate" title="${NO_RATE_HINT}">${NO_RATE}</span>`);
+// รวมยอดเฉพาะใบที่คำนวณได้ ; missing = จำนวนใบที่ยังไม่มีอัตรา
+const sumAmount = (list) => list.reduce((t, c) => (hasAmount(c.totalAmount)
+  ? { ...t, sum: t.sum + Number(c.totalAmount) } : { ...t, missing: t.missing + 1 }), { sum: 0, missing: 0 });
+// ยอดรวมท้ายตาราง (HTML): '36,000' + 'ไม่รวม 2 ใบที่ยังไม่มีอัตรา'
+const amountTotal = (list, unit = '') => {
+  const { sum, missing } = sumAmount(list);
+  return `${num(sum)}${unit}${missing ? `<small class="no-rate" title="${NO_RATE_HINT}">ไม่รวม ${missing} ใบที่ยังไม่มีอัตรา</small>` : ''}`;
+};
 const termLabel = (t) => { const [s, y] = String(t || '').split('-'); return y ? `${s}/${y}` : (t || '-'); }; // '1-2569' → '1/2569'
 // 'CS262' / 'CS262 Lab' (คาบปฏิบัติของ TA) ; งานของนักศึกษาช่วยงานไม่มีรหัสวิชา → ใช้ชื่องาน
 const courseShort = (c) => (c.courseId ? `${c.courseId}${c.type === 'lab' ? ' Lab' : ''}` : (c.courseName || '-'));
@@ -374,17 +388,32 @@ function showErrorState(el, title, err, retry) {
 // ทุกหน้าที่ต้องเข้าสู่ระบบเรียกตอนเริ่ม: ไม่ได้เข้าสู่ระบบ → ไปหน้า login (คืน null ให้หน้าหยุดทำงาน)
 // roles = บทบาทที่เปิดหน้านี้ได้ — บทบาทอื่นถูกพาไปหน้าแรกของตัวเอง (เช่น admin เปิดหน้าสร้างคำขอไม่ได้)
 // เข้าสู่ระบบแล้ว → วาดแถบด้านบนตามบทบาท แล้วคืนผู้ใช้ { name, lastName, role }
+// ถูกพาออกเพราะไม่มีสิทธิ์ → หน้าปลายทางได้ ?denied=1 แล้วแจ้งผู้ใช้ (กันจริงอยู่ที่ API: /admin/* ตอบ 403)
 async function initPage(roles = REQUESTERS) {
   let user = null;
   try { if (await authCall('isLoggedIn')) user = await currentUser(); } catch { user = null; }
   if (!user?.role) { goLogin(); return null; }
-  if (!roles.includes(user.role)) { location.replace(ROLE_HOME[user.role] || 'login.html'); return null; }
+  if (!roles.includes(user.role)) {
+    const home = ROLE_HOME[user.role];
+    location.replace(home ? `${home}?denied=1` : 'login.html');
+    return null;
+  }
   try {
     const site = await loadJSON('site.json');
     renderTopbar(site, user);
     renderFooter(site);
   } catch (e) { console.warn('โหลด site.json ไม่ได้', e); }
+  showDenied();
   return user;
+}
+
+// แจ้งครั้งเดียว แล้วลบ denied ออกจาก URL (รีเฟรชแล้วไม่ขึ้นซ้ำ)
+function showDenied() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has('denied')) return;
+  q.delete('denied');
+  history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : '') + location.hash);
+  toast('คุณไม่มีสิทธิ์เข้าหน้านั้น — พากลับหน้าภาพรวมแล้ว', true, 6000);
 }
 
 /* ====================================================================
@@ -588,10 +617,12 @@ function mockSeedDemo(db) {
 
 // เติมยอดรวมแบบเดียวกับที่ server ส่งกลับ
 function mockView(c) {
-  const rate = rateOf(MOCK_RATES, c.role).ratePerHour || 0;
+  const rate = rateOf(MOCK_RATES, c.role).ratePerHour;
   const { owner, ...rest } = c;
   const totalHours = sumHours(c.items);
-  return JSON.parse(JSON.stringify({ ...rest, ratePerHour: rate, totalHours, totalAmount: Math.round(totalHours * rate * 100) / 100 }));
+  // ไม่มีอัตรา → null เหมือน server
+  const totalAmount = rate == null ? null : Math.round(totalHours * rate * 100) / 100;
+  return JSON.parse(JSON.stringify({ ...rest, ratePerHour: rate ?? null, totalHours, totalAmount }));
 }
 
 async function mockRequest(method, path, body) {

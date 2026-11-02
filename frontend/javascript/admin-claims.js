@@ -29,7 +29,7 @@ const row = (c) => `<tr>
   <td data-label="ผู้ขอ" class="who">${esc(c.requesterName)}</td>
   <td data-label="รายการ">${esc(itemLabel(c))}</td>
   <td data-label="ชม." class="num">${num(c.totalHours)}</td>
-  <td data-label="บาท" class="num">${num(c.totalAmount)}</td>
+  <td data-label="บาท" class="num">${amountCell(c.totalAmount)}</td>
   <td data-label="สถานะ" class="st">${statusCell(c)}</td>
   <td class="act">${c.status === 'submitted'
     ? `<a class="btn sm" href="admin-review.html?id=${encodeURIComponent(c.claimId)}">ตรวจ</a>`
@@ -85,7 +85,7 @@ function exportCsv() {
   if (!list.length) { toast('ไม่มีรายการให้ส่งออก', true); return; }
   const rows = [['เลขที่', 'บทบาท', 'ผู้ขอ', 'รายการ', 'วิชา', 'งานเดือน', 'รอบการเบิก', 'ชั่วโมง', 'ยอดเบิก (บาท)', 'สถานะ', 'ช่องทาง', 'ยื่นเมื่อ'],
     ...list.map((c) => [c.claimId, ROLE_TH[c.role], c.requesterName, itemLabel(c), courseFull(c), thMonth(c.month), roundLabel(roundKey(c)),
-      c.totalHours, c.totalAmount, statusOf(c.status, c.printMethod).th, PRINT_METHOD[c.printMethod]?.short || '', c.submittedAt ? thDateTime(c.submittedAt) : ''])];
+      c.totalHours, hasAmount(c.totalAmount) ? c.totalAmount : '', statusOf(c.status, c.printMethod).th, PRINT_METHOD[c.printMethod]?.short || '', c.submittedAt ? thDateTime(c.submittedAt) : ''])];
   downloadCsv(`คำขอ_${todayIso()}.csv`, rows);
 }
 

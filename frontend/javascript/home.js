@@ -81,7 +81,7 @@ function renderRecent(claims) {
     <td data-label="${user.role === 'instructor' ? 'วิชา' : 'รายการ'}">${esc(user.role === 'instructor' ? c.courseId : courseShort(c))}</td>
     <td data-label="งานเดือน">${esc(thMonth(c.month))}</td>
     <td data-label="ชั่วโมง" class="num">${num(c.totalHours)}</td>
-    <td data-label="ยอดเบิก (บาท)" class="num">${num(c.totalAmount)}</td>
+    <td data-label="ยอดเบิก (บาท)" class="num">${amountCell(c.totalAmount)}</td>
     <td data-label="สถานะ">${chip(c.status, c.printMethod)}</td>
     <td class="act"><a class="btn ghost sm" href="detail.html?id=${encodeURIComponent(c.claimId)}">เปิด</a></td>
   </tr>`).join('');

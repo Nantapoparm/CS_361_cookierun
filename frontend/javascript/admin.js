@@ -21,7 +21,7 @@ const pendRow = (c) => `<tr>
   <td data-label="ผู้ขอ" class="who">${esc(c.requesterName)}</td>
   <td data-label="รายการ">${esc(itemLabel(c))}</td>
   <td data-label="ชม." class="num">${num(c.totalHours)}</td>
-  <td data-label="บาท" class="num">${num(c.totalAmount)}</td>
+  <td data-label="บาท" class="num">${amountCell(c.totalAmount)}</td>
   <td data-label="สถานะ" class="st">${statusCell(c)}</td>
   <td class="act"><a class="btn sm" href="admin-review.html?id=${encodeURIComponent(c.claimId)}">ตรวจ</a></td>
 </tr>`;
@@ -53,7 +53,7 @@ async function load() {
 
     const roles = ['instructor', 'ta', 'student_helper'].map((r) => {
       const list = inRound.filter((c) => c.role === r);
-      return `<li><div><b>${esc(ROLE_TH[r] === 'ผู้ช่วยสอน' ? 'TA' : ROLE_TH[r])}</b><small>${num(list.reduce((s, c) => s + Number(c.totalAmount || 0), 0))} ฿</small></div><span><b>${list.length}</b> คำขอ</span></li>`;
+      return `<li><div><b>${esc(ROLE_TH[r] === 'ผู้ช่วยสอน' ? 'TA' : ROLE_TH[r])}</b><small>${amountTotal(list, ' ฿')}</small></div><span><b>${list.length}</b> คำขอ</span></li>`;
     });
     $('byRole').innerHTML = `<div class="card-head"><h3 id="roleTitle">คำขอทั้งหมด (รอบนี้)</h3><span class="tag">${inRound.length} คำขอ</span></div>
       <ul class="role-list">${roles.join('')}</ul>`;

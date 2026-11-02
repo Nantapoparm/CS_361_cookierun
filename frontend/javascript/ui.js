@@ -208,12 +208,12 @@ const skeleton = (widths = ['w40', '', 'w80', 'lg']) =>
 /* ---------- Toast ---------- */
 
 let toastTimer;
-function toast(text, isError = false) {
+function toast(text, isError = false, ms = 3200) {
   document.querySelector('.toast')?.remove();
   clearTimeout(toastTimer);
   document.body.insertAdjacentHTML('beforeend',
     `<div class="toast ${isError ? 'err' : ''}" role="status"><span class="dot" aria-hidden="true">${isError ? '!' : '✓'}</span>${esc(text)}</div>`);
-  toastTimer = setTimeout(() => document.querySelector('.toast')?.remove(), 3200);
+  toastTimer = setTimeout(() => document.querySelector('.toast')?.remove(), ms);
 }
 
 /* ---------- Modal ----------
