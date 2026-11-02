@@ -110,7 +110,7 @@ function render() {
   $('lead').textContent = [c.requesterName, ROLE_TH[c.role], itemLabel(c), `งานเดือน ${thMonth(c.month)}`].filter(Boolean).join(' · ');
   const info = [
     ['ผู้ขอเบิก', c.requesterName],
-    ['บทบาท', `${ROLE_TH[c.role]} · ${num(c.ratePerHour)} บ./ชม.`],
+    ['บทบาท', ROLE_TH[c.role]],
     ...(c.role === 'ta' ? [['อาจารย์ผู้สอน', c.instructorName || '-']] : []),
     ['รายการ', `${c.items.length} ${c.role === 'student_helper' ? 'วัน' : 'คาบ'} · ${num(c.totalHours)} ชม.`],
     ['ยอดเบิก', baht(c.totalAmount)],
