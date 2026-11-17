@@ -201,6 +201,9 @@ function normAction(a) {
   return { ...a, action, note };
 }
 
+// session (โครงการ) ของคาบสอน = ตาราง session ใน DB
+const SESSIONS = [{ id: 1, label: 'ภาคปกติ' }, { id: 2, label: 'ภาคพิเศษ' }];
+
 /* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
   // { academicYear, semester, claimMonth:'YYYY-MM', deadline:'YYYY-MM-DD', daysLeft, cycle }
@@ -212,8 +215,20 @@ const api = {
   },
 
   // ปฏิทินคาบสอน (อาจารย์ / TA) → { month, periods:[period], summary:[{courseId, periods, hours}], courses:[course] }
-  getSchedule: async (month) => {
-    const d = await request('GET', '/schedule' + qs({ month }));
+  // sessionId = 1 ภาคปกติ | 2 ภาคพิเศษ — Lambda แสดงทีละ session (ไม่ส่ง = ภาคปกติ)
+  // ไม่ระบุ sessionId (หน้าแรก / สร้างคำขอ / สอนชดเชย) = ดึงทุก session แล้วรวมกัน เหมือนก่อนแยก session
+  getSchedule: async (month, sessionId) => {
+    if (sessionId == null && !API_CONFIG.USE_MOCK) {
+      const parts = await Promise.all(SESSIONS.map((s) => api.getSchedule(month, s.id)));
+      const merged = { month, periods: [], summary: [], courses: [] };
+      parts.forEach((p) => {
+        merged.periods.push(...p.periods); merged.summary.push(...p.summary); merged.courses.push(...p.courses);
+        if (p.allCourses) merged.allCourses = [...(merged.allCourses || []), ...p.allCourses];
+      });
+      merged.periods.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+      return merged;
+    }
+    const d = await request('GET', '/schedule' + qs({ month, sessionId }));
     const periods = (d?.periods || []).map(normPeriod).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
     // courses = วิชาของผู้ใช้ ; allCourses = ทุกวิชาที่เปิดในภาค (ตัวเลือกตอนเพิ่มคาบ — Lambda เก่าไม่ส่งมา)
     return { month, periods, summary: d?.summary || [], courses: d?.courses?.length || d?.allCourses ? (d.courses || []) : coursesOf(periods), ...(d?.allCourses ? { allCourses: d.allCourses } : {}) };
@@ -227,8 +242,8 @@ const api = {
   // ปฏิทินงาน (นักศึกษาช่วยงาน) → { items:[workDay], courses:[course] } ; body = { offeringId, workDate, startTime, endTime, Remark? }
   // API จริงไม่มี /work-days — ใช้ /schedule (teaching_histories) ร่วมกับอาจารย์ / TA :
   //   วันทำงาน 1 วัน = 1 แถว ; หมายเหตุ (Remark) เก็บในคอลัมน์ description ; workId = historyId
-  // mock ยังใช้ /work-days เดิม
-  getWorkDays: async (month) => {
+  // mock ยังใช้ /work-days เดิม ; sessionId เหมือน getSchedule
+  getWorkDays: async (month, sessionId) => {
     if (API_CONFIG.USE_MOCK) {
       const d = await request('GET', '/work-days' + qs({ month }));
       const items = (Array.isArray(d) ? d : (d?.items || []))
@@ -236,7 +251,7 @@ const api = {
         .sort((a, b) => (a.workDate + a.startTime).localeCompare(b.workDate + b.startTime));
       return { month, items, courses: d?.courses?.length ? d.courses : coursesOf(items) };
     }
-    const s = await api.getSchedule(month);
+    const s = await api.getSchedule(month, sessionId);
     workCourses = s.allCourses?.length ? s.allCourses : s.courses;
     const items = s.periods.map((p) => {
       const c = s.courses.find((x) => sameOffering(p, x)) || {};

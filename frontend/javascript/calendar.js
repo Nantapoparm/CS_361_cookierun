@@ -1,5 +1,5 @@
 // calendar.js — ปฏิทินคาบสอน (Figma I2 อาจารย์ · I3 แก้ไขคาบ · T2 TA หลายวิชา · ST2 ปฏิทินว่าง) และปฏิทินงาน (S2 นักศึกษาช่วยงาน)
-// Input : อาจารย์ / TA → GET /schedule?month=YYYY-MM ; นักศึกษาช่วยงาน → GET /schedule?month=YYYY-MM เช่นกัน (api.getWorkDays แปลงเป็นวันทำงาน)
+// Input : อาจารย์ / TA → GET /schedule?month=YYYY-MM ; นักศึกษาช่วยงาน → GET /schedule?month=YYYY-MM เช่นกัน (api.getWorkDays แปลงเป็นวันทำงาน) ; ?sessionId=1|2 (ภาคปกติ / ภาคพิเศษ) เลือกที่ปุ่มบนแถบเครื่องมือ
 // Output: ปฏิทินเดือน / สัปดาห์ (มือถือแสดงเป็นรายการรายวัน), กล่องสรุปเดือนนี้ที่ใช้ autofill คำขอ
 // เพิ่ม/แก้คาบ → POST /schedule body = { courseId, sessionId, startTime, endTime (ISO 8601), room, description, repeatUntil? }
 //              description = ประเภทคาบ regular | cancelled | makeup (teaching_histories ไม่มีคอลัมน์ kind)
@@ -10,14 +10,19 @@ let user, period, rates = [];
 let view = 'month';
 let month;          // เดือนที่แสดง 'YYYY-MM'
 let weekStart;      // วันจันทร์ของสัปดาห์ที่แสดง (Date)
-const cache = {};   // month → ข้อมูลของเดือน
+const cache = {};   // 'sessionId|month' → ข้อมูลของเดือน
+// โครงการที่แสดง (1 ภาคปกติ / 2 ภาคพิเศษ) — GET /schedule แสดงทีละ session ; จำค่าล่าสุดไว้ในเครื่อง
+const SESSION_KEY = 'calendarSessionId';
+let sessionId = Number(localStorage.getItem(SESSION_KEY)) || SESSIONS[0].id;
+const cacheKey = (ym) => `${sessionId}|${ym}`;
 const student = () => user.role === 'student_helper';
 
 /* ---------- ข้อมูล ---------- */
 
 async function fetchMonth(ym, force = false) {
-  if (!cache[ym] || force) cache[ym] = student() ? await api.getWorkDays(ym) : await api.getSchedule(ym);
-  return cache[ym];
+  const k = cacheKey(ym);
+  if (!cache[k] || force) cache[k] = student() ? await api.getWorkDays(ym, sessionId) : await api.getSchedule(ym, sessionId);
+  return cache[k];
 }
 // เหตุการณ์ของช่วงวันที่ที่แสดง (สัปดาห์อาจคร่อม 2 เดือน)
 function eventsOf(data) {
@@ -145,7 +150,7 @@ function usualSlot(c) {
 function renderSide() {
   // สรุปเฉพาะเดือนที่แสดง (คาบที่ไม่ใช่งดสอน)
   const ym = view === 'month' ? month : weekDays()[3].slice(0, 7);
-  const inMonth = (cache[ym] ? eventsOf(cache[ym]) : events).filter((e) => e.date.startsWith(ym) && e.kind !== 'cancelled');
+  const inMonth = (cache[cacheKey(ym)] ? eventsOf(cache[cacheKey(ym)]) : events).filter((e) => e.date.startsWith(ym) && e.kind !== 'cancelled');
   const sumOf = (c) => {
     const list = inMonth.filter((e) => sameOffering(e, c));
     return { n: list.length, h: sumHours(list.map((e) => ({ hours: e.hours ?? hoursBetween(e.startTime, e.endTime) }))) };
@@ -355,6 +360,13 @@ function setView(v) {
   load();
 }
 
+function setSession(id) {
+  sessionId = id;
+  localStorage.setItem(SESSION_KEY, String(id));
+  document.querySelectorAll('[data-session]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.session) === id)));
+  load();
+}
+
 function step(n) {
   if (view === 'month') month = addMonths(month, n);
   else { weekStart.setDate(weekStart.getDate() + 7 * n); month = isoDate(new Date(weekStart.getTime() + 3 * 86400000)).slice(0, 7); }
@@ -376,6 +388,10 @@ async function initCalendar() {
   $('btnMakeup').hidden = role !== 'instructor';
   $('btnMakeup').href = `makeup.html?month=${month}`;
 
+  if (!SESSIONS.some((x) => x.id === sessionId)) sessionId = SESSIONS[0].id;
+  $('sessionSeg').innerHTML = SESSIONS.map((x) =>
+    `<button type="button" data-session="${x.id}" aria-pressed="${x.id === sessionId}">${esc(x.label)}</button>`).join('');
+  document.querySelectorAll('[data-session]').forEach((b) => b.addEventListener('click', () => setSession(Number(b.dataset.session))));
   document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   $('prev').addEventListener('click', () => step(-1));
   $('next').addEventListener('click', () => step(1));
