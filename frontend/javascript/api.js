@@ -203,6 +203,7 @@ function normAction(a) {
 
 // session (โครงการ) ของคาบสอน = ตาราง session ใน DB
 const SESSIONS = [{ id: 1, label: 'ภาคปกติ' }, { id: 2, label: 'ภาคพิเศษ' }];
+const sessionLabel = (id) => SESSIONS.find((s) => s.id === Number(id))?.label || '';
 
 /* ---------- Route ตาม openapi.yaml (V3) ---------- */
 const api = {
@@ -252,7 +253,9 @@ const api = {
       return { month, items, courses: d?.courses?.length ? d.courses : coursesOf(items) };
     }
     const s = await api.getSchedule(month, sessionId);
-    workCourses = s.allCourses?.length ? s.allCourses : s.courses;
+    // สะสมวิชาทุก session ที่โหลดแล้ว (หน้าปฏิทินสลับภาคแล้วอ่านจาก cache ไม่เรียกฟังก์ชันนี้ซ้ำ) ; ชุดล่าสุดอยู่หน้า
+    const fresh = s.allCourses?.length ? s.allCourses : s.courses;
+    workCourses = [...fresh, ...workCourses.filter((x) => !fresh.some((y) => String(y.offeringId) === String(x.offeringId)))];
     const items = s.periods.map((p) => {
       const c = s.courses.find((x) => sameOffering(p, x)) || {};
       return { workId: p.historyId, offeringId: p.offeringId ?? c.offeringId, courseId: p.courseId, courseName: p.courseName || c.courseName || '', sessionId: p.sessionId ?? c.sessionId,

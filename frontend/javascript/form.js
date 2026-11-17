@@ -141,15 +141,22 @@ function monthOptions() {
   return [...set].sort().reverse().map((m) => `<option value="${m}"${m === month ? ' selected' : ''}>${esc(thMonthLong(m))}</option>`).join('');
 }
 
+// ชื่อภาค (ปกติ / พิเศษ) ต่อท้ายชื่อใบ — แสดงเมื่อใบในเดือนนี้มีมากกว่า 1 ภาค (วิชาเดียวกันคนละภาคจะได้แยกออก)
+function tabSession(t) {
+  const ids = new Set(tabs.map((x) => x.course?.sessionId).filter((v) => v != null).map(Number));
+  return ids.size > 1 && t.course?.sessionId != null ? ` (${sessionLabel(t.course.sessionId)})` : '';
+}
+
 function headHtml() {
   const c = tabs[cur]?.course || claim || {};
   const deadline = claim?.deadline ? claim : period;
   const termTxt = `ภาค ${claim?.semester || period.semester} / ${be(claim?.academicYear || period.academicYear)}`;
   const tabsHtml = tabs.length > 1 ? `<div class="field full"><label>1 ใบต่อวิชา <span class="muted">(${student() ? 'แยกตามงาน' : 'อาจารย์แต่ละวิชาเซ็นของตัวเอง'})</span></label>
       <div class="claim-tabs" role="tablist">${tabs.map((t, i) => {
+        const ses = tabSession(t);
         const h = sumHours(i === cur ? checkedRows() : (t.listed?.items || t.source));
         const who = user.role === 'ta' && t.course.instructorName ? ` · ${t.course.instructorName.replace(/\s.*$/, '')}` : '';
-        return `<button type="button" role="tab" data-tab="${i}" aria-selected="${i === cur}">ใบที่ ${i + 1} · ${esc(courseShort(t.course))}${esc(who)} · ${num(h)} ชม.${t.listed && !EDITABLE.includes(t.listed.status) ? ' · ยื่นแล้ว' : ''}</button>`;
+        return `<button type="button" role="tab" data-tab="${i}" aria-selected="${i === cur}">ใบที่ ${i + 1} · ${esc(courseShort(t.course))}${esc(ses)}${esc(who)} · ${num(h)} ชม.${t.listed && !EDITABLE.includes(t.listed.status) ? ' · ยื่นแล้ว' : ''}</button>`;
       }).join('')}</div></div>` : '';
   const fields = student()
     ? [field('งาน', c.courseName), field('ผู้ดูแล', c.instructorName, 'auto'), field('Load', LOAD_TH[user.load] || LOAD_TH.full, 'sys')]
@@ -281,7 +288,7 @@ function renderEmpty() {
 function renderLocked(c) {
   $('title').textContent = 'สร้างคำขอใหม่';
   $('saved').textContent = '';
-  $('body').innerHTML = `${tabs.length > 1 ? `<div class="card section-gap"><div class="claim-tabs">${tabs.map((t, i) => `<button type="button" data-tab="${i}" aria-selected="${i === cur}">ใบที่ ${i + 1} · ${esc(courseShort(t.course))}</button>`).join('')}</div></div>` : ''}
+  $('body').innerHTML = `${tabs.length > 1 ? `<div class="card section-gap"><div class="claim-tabs">${tabs.map((t, i) => `<button type="button" data-tab="${i}" aria-selected="${i === cur}">ใบที่ ${i + 1} · ${esc(courseShort(t.course))}${esc(tabSession(t))}</button>`).join('')}</div></div>` : ''}
     <div class="section-gap">${alertHtml('info', `<b>คำขอ #${esc(c.claimId)} (${esc(courseShort(c))} เดือน ${esc(thMonth(c.month))}) ยื่นแล้ว</b> — สถานะ ${chip(c.status, c.printMethod)}`,
       `<a class="btn ghost sm" href="detail.html?id=${encodeURIComponent(c.claimId)}">ดูรายละเอียด</a>`)}</div>`;
   $('body').querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => selectTab(Number(b.dataset.tab))));

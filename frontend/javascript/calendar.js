@@ -15,13 +15,27 @@ const cache = {};   // 'sessionId|month' → ข้อมูลของเด�
 const SESSION_KEY = 'calendarSessionId';
 let sessionId = Number(localStorage.getItem(SESSION_KEY)) || SESSIONS[0].id;
 const cacheKey = (ym) => `${sessionId}|${ym}`;
+// รายวิชาในตัวเลือกของหน้าต่างเพิ่ม/แก้คาบ (เปลี่ยนตามช่อง "ภาค" ในหน้าต่าง)
+let pickCourses = [];
+const sessionField = (sid, locked) => `<div class="field"><label for="fSession">ภาค</label>
+  <select id="fSession"${locked ? ' disabled' : ''}>${SESSIONS.map((x) => `<option value="${x.id}"${x.id === sid ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>`;
+const courseOptions = (list, ci, label) => list.length
+  ? list.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(label(x))}</option>`).join('')
+  : '<option value="">ไม่มีรายวิชาในภาคนี้</option>';
+const periodLabel = (x) => (user.role === 'ta' ? courseSec(x) : courseFull(x));
+const workLabel = (x) => x.courseName;
+// รายวิชาของ session ในเดือนที่เลือก (ใช้ cache เดียวกับปฏิทิน)
+async function sessionCourses(sid, ym) {
+  const d = await fetchMonth(ym, false, sid);
+  return d.allCourses?.length ? d.allCourses : (d.courses || []);
+}
 const student = () => user.role === 'student_helper';
 
 /* ---------- ข้อมูล ---------- */
 
-async function fetchMonth(ym, force = false) {
-  const k = cacheKey(ym);
-  if (!cache[k] || force) cache[k] = student() ? await api.getWorkDays(ym, sessionId) : await api.getSchedule(ym, sessionId);
+async function fetchMonth(ym, force = false, sid = sessionId) {
+  const k = `${sid}|${ym}`;
+  if (!cache[k] || force) cache[k] = student() ? await api.getWorkDays(ym, sid) : await api.getSchedule(ym, sid);
   return cache[k];
 }
 // เหตุการณ์ของช่วงวันที่ที่แสดง (สัปดาห์อาจคร่อม 2 เดือน)
@@ -238,12 +252,13 @@ function periodForm(e, date) {
   const isNew = !e;
   const kind = e?.kind || (user.role === 'instructor' && date ? 'makeup' : 'regular');
   const ci = e ? pickIdx(e) : 0;
-  const c = allCourses[ci] || {};
+  const c = pickCourses[ci] || {};
   return `<div class="form-2">
+    ${sessionField(sessionId, !isNew)}
     <div class="field"><label for="fCourse">วิชา</label>
-      <select id="fCourse">${allCourses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(user.role === 'ta' ? courseSec(x) : courseFull(x))}</option>`).join('')}</select></div>
+      <select id="fCourse">${courseOptions(pickCourses, ci, periodLabel)}</select></div>
     <div class="field sys"><label for="fSec">Section</label><input id="fSec" value="${esc(c.section || '-')}" readonly></div>
-    <div class="field full"><label for="fRoom">ห้อง</label><input id="fRoom" value="${esc(e?.room ?? c.room ?? '')}" maxlength="50"></div>
+    <div class="field"><label for="fRoom">ห้อง</label><input id="fRoom" value="${esc(e?.room ?? c.room ?? '')}" maxlength="50"></div>
     <div class="field"><label for="fDate">วันที่</label><input type="date" id="fDate" value="${esc(e?.date || date || todayIso())}" required></div>
     <div class="field"><span class="lbl">เวลา</span>
       <div class="time2"><input type="time" id="fStart" aria-label="เวลาเริ่ม" value="${esc(e?.startTime || c.startTime || '09:00')}"><span>–</span><input type="time" id="fEnd" aria-label="เวลาสิ้นสุด" value="${esc(e?.endTime || c.endTime || '12:00')}"></div>
@@ -259,10 +274,11 @@ function periodForm(e, date) {
 
 function workForm(e, date) {
   const ci = e ? pickIdx(e) : 0;
-  const c = allCourses[ci] || {};
+  const c = pickCourses[ci] || {};
   return `<div class="form-2">
-    <div class="field full"><label for="fCourse">งาน</label>
-      <select id="fCourse">${allCourses.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(x.courseName)}</option>`).join('')}</select></div>
+    ${sessionField(sessionId, !!e)}
+    <div class="field"><label for="fCourse">งาน</label>
+      <select id="fCourse">${courseOptions(pickCourses, ci, workLabel)}</select></div>
     <div class="field"><label for="fDate">วันที่</label><input type="date" id="fDate" value="${esc(e?.date || date || todayIso())}"></div>
     <div class="field"><span class="lbl">เวลาเข้า – ออก</span>
       <div class="time2"><input type="time" id="fStart" aria-label="เวลาเข้า" value="${esc(e?.startTime || c.startTime || '13:00')}"><span>–</span><input type="time" id="fEnd" aria-label="เวลาออก" value="${esc(e?.endTime || c.endTime || '17:00')}"></div>
@@ -272,10 +288,14 @@ function workForm(e, date) {
   </div>`;
 }
 
+let savedSession = null;
 async function openEditor(e, date) {
-  if (!allCourses.length) { toast('ยังไม่พบรายวิชาของภาคนี้ กรุณาติดต่อเจ้าหน้าที่', true); return; }
+  savedSession = null;
   const isNew = !e;
-  const c0 = e || allCourses[0];
+  // เพิ่มใหม่: ภาคที่แสดงอยู่ไม่มีวิชาก็เปิดได้ เลือกภาคอื่นในหน้าต่าง ; แก้ไข: ภาคเดิมของคาบ (ล็อกไว้)
+  if (!isNew && !allCourses.length) { toast('ยังไม่พบรายวิชาของภาคนี้ กรุณาติดต่อเจ้าหน้าที่', true); return; }
+  pickCourses = allCourses;
+  const c0 = e || pickCourses[0] || {};
   const what = student() ? 'วันทำงาน' : 'คาบสอน';
   const res = await openModal({
     wide: true,
@@ -289,10 +309,25 @@ async function openEditor(e, date) {
       const hours = () => { const h = hoursBetween(q('#fStart').value, q('#fEnd').value); q('#fHours').textContent = h > 0 ? `ระบบคำนวณ ${num(h)} ชั่วโมง` : 'เวลาสิ้นสุดต้องหลังเวลาเริ่ม'; };
       ['#fStart', '#fEnd'].forEach((s) => q(s).addEventListener('input', hours));
       hours();
-      q('#fCourse').addEventListener('change', () => {
-        const c = allCourses[q('#fCourse').value];
+      const syncCourse = () => {
+        const c = pickCourses[q('#fCourse').value] || {};
         if (q('#fSec')) q('#fSec').value = c.section || '-';
         if (q('#fRoom') && !q('#fRoom').value) q('#fRoom').value = c.room || '';
+      };
+      q('#fCourse').addEventListener('change', syncCourse);
+      // เปลี่ยนภาค → โหลดรายวิชาของภาคนั้น (เดือนตามวันที่ที่เลือก)
+      q('#fSession').addEventListener('change', async () => {
+        const sel = q('#fCourse');
+        sel.disabled = true;
+        try {
+          pickCourses = await sessionCourses(Number(q('#fSession').value), (q('#fDate').value || todayIso()).slice(0, 7));
+        } catch (err) {
+          pickCourses = [];
+          toast(`โหลดรายวิชาไม่สำเร็จ: ${errorText(err)}`, true);
+        }
+        sel.innerHTML = courseOptions(pickCourses, 0, student() ? workLabel : periodLabel);
+        sel.disabled = false;
+        syncCourse();
       });
       q('#fRepeat')?.addEventListener('change', () => { q('.repeat-until').hidden = !q('#fRepeat').checked; });
       // "ทุกสัปดาห์" ใช้ได้เฉพาะคาบตามตาราง (งดสอน / ชดเชย เป็นรายคาบ)
@@ -302,7 +337,9 @@ async function openEditor(e, date) {
     },
     onOk: async (el) => {
       const q = (s) => el.querySelector(s);
-      const c = allCourses[q('#fCourse').value];
+      const c = pickCourses[q('#fCourse').value];
+      if (!c) throw new Error('กรุณาเลือกวิชา');
+      savedSession = Number(q('#fSession').value);
       const d = q('#fDate').value, a = q('#fStart').value, b = q('#fEnd').value;
       if (!d) throw new Error('กรุณาเลือกวันที่');
       if (hoursBetween(a, b) <= 0) throw new Error('เวลาสิ้นสุดต้องหลังเวลาเริ่ม');
@@ -328,7 +365,12 @@ async function openEditor(e, date) {
       }
     }
   });
-  if (res === true) { toast(isNew ? `เพิ่ม${what}แล้ว` : `บันทึก${what}แล้ว`); clearCache(); load(true); }
+  if (res === true) {
+    toast(isNew ? `เพิ่ม${what}แล้ว` : `บันทึก${what}แล้ว`);
+    clearCache();
+    // บันทึกในอีกภาค → สลับปฏิทินไปภาคนั้น ให้เห็นคาบที่เพิ่งบันทึก
+    if (savedSession && savedSession !== sessionId) setSession(savedSession); else load(true);
+  }
   if (res === 'extra') removeEvent(e);
 }
 
